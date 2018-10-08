@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>Brief introduction on reverse engineering Crystal binaries.</title>
+  <meta name="description" content="Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2018/10/08/reversing-crystal-binaries/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="Brief introduction on reverse engineering Crystal binaries.">
+  <meta name="twitter:description" content="Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax...">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">Brief introduction on reverse engineering Crystal binaries.</h1>
+    
+    <p class="post-meta"><time datetime="2018-10-08T13:02:44+01:00" itemprop="datePublished">Oct 8, 2018</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/reversing/">reversing</a>,
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/crystal/">crystal</a>,
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/ruby/">ruby</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.</p>
+
+<p>You can learn more about Crystal here: <a href="https://crystal-lang.org/">crystal</a></p>
+
+<p>Any new compiled programming language results interesting from a reverse engineering perspective, malware is becoming more and more based on this kind of compiled programming language, whose syntax is easier than C or C++, but mantaining the ability to run standalone.</p>
+
+<p>A Crystal Hello World example, looks like this:</p>
+
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">puts</span> <span class="s1">'Hello world!'</span>
+</code></pre></div></div>
+
+<p>Yes, just like Ruby. To compile this, let’s save it as <code class="highlighter-rouge">hello.cr</code> and execute the Crystal compiler: <code class="highlighter-rouge">crystal build hello.cr</code>. This should create a <code class="highlighter-rouge">hello</code> executable with the following characteristics: <code class="highlighter-rouge">hello: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, with debug_info, not stripped</code></p>
+
+<p>A dinamically linked, non-stripped binary. Cool!</p>
+
+<h4 id="ida-analysis">IDA analysis.</h4>
+
+<p>Let’s load this newly created binary using IDA Free 7.0 for Linux, (keep calm radare2 fanboys). Something catch my attention when load finished:</p>
+
+<p><img src="/images/reversing-crystal/lot_of_functions.png" alt="lot_of_functions" /></p>
+
+<p>Maaaaaaan 2055 functions?!!! Calm down buddy, if you take a look at other compiled languages, like Golang, this is normal. Modern compiled languages, import everything they need to be cross-platform, so lot of functions are included in a single binary to be able to compile binaries for Windows, Linux and OSX using a single compiler.</p>
+
+<p>So where’s the program itself?</p>
+
+<p>By default, IDA show us to the first function basic blocks executed in the program.</p>
+
+<p><img src="/images/reversing-crystal/main.png" alt="ida_main" /></p>
+
+<p>Ok cool, so this function just calls another function: <code class="highlighter-rouge">main_0</code>, which also calls another function <code class="highlighter-rouge">main_user_code</code></p>
+
+<p><img src="/images/reversing-crystal/main_0.png" alt="ida_main_0" /></p>
+
+<p>And <code class="highlighter-rouge">main_user_code</code> just calls another function <code class="highlighter-rouge">__crystal_main</code></p>
+
+<p><img src="/images/reversing-crystal/main_user_code.png" alt="ida_main_user_code" /></p>
+
+<p>Let’s then analyze this <code class="highlighter-rouge">__crystal_main</code> function, opening their basic blocks view, something really ugly happen:</p>
+
+<p><img src="/images/reversing-crystal/what_the_hell.png" alt="ida_what_the_hell" /></p>
+
+<p>… what the hell man, where the fuck is our application code? Just at the end!</p>
+
+<p><img src="/images/reversing-crystal/code.png" alt="ida_what_the_hell" /></p>
+
+<p>There you can see the loading of our “Hello world!” string, which is at off_9A530, and a call to <code class="highlighter-rouge">puts</code> function which seems to be a wrapper for <code class="highlighter-rouge">puts_0</code> function, which really executes the output operation and shows our string in stdout.</p>
+
+<p>Ok, so the workflow seems to be:</p>
+
+<p><code class="highlighter-rouge">main</code> -&gt; <code class="highlighter-rouge">main_0</code> -&gt; <code class="highlighter-rouge">main_user_code</code> -&gt; <code class="highlighter-rouge">__crystal_main</code> and, at the end, our script code is executed.</p>
+
+<p>Let’s see how conditionals and classes works at Crystal creating a simple script with the following code:</p>
+
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">MyHelloClass</span>
+  <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="n">number</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="vi">@number</span> <span class="o">=</span> <span class="n">number</span>
+  <span class="k">end</span>
+
+  <span class="k">def</span> <span class="nf">test_random</span>
+    <span class="k">if</span> <span class="vi">@number</span> <span class="o">&lt;</span> <span class="mi">4</span>
+      <span class="nb">puts</span> <span class="s2">"A is lower than 4"</span>
+    <span class="k">else</span>
+      <span class="nb">puts</span> <span class="s2">"A is GREATER than 4"</span>
+    <span class="k">end</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+
+<span class="nb">puts</span> <span class="s2">"Now, an if sentence will appear based on rand numeric value"</span>
+
+<span class="n">num</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="no">MyHelloClass</span><span class="p">.</span><span class="nf">new</span><span class="p">(</span><span class="n">num</span><span class="p">)</span>
+<span class="n">a</span><span class="p">.</span><span class="nf">test_random</span>
+</code></pre></div></div>
+
+<p>Ok simple, let’s compile it <code class="highlighter-rouge">crystal build hello2.cr</code> and open it using IDA, this time going directly to <code class="highlighter-rouge">__crystal_main</code> buttom, where our code should be.</p>
+
+<p><img src="/images/reversing-crystal/hello2.png" alt="ida_hello2" /></p>
+
+<p>There it is, first, rand is called, which is, again a wrapper for Random::PCG32 function identified in IDA as <code class="highlighter-rouge">new_98</code></p>
+
+<p>Then, a call to <code class="highlighter-rouge">new_101</code> is done, when inspecting this is our <code class="highlighter-rouge">MyHelloClass::new</code> function, which is the wrapper for the <code class="highlighter-rouge">initialize</code> function in our class. In Ruby, the <code class="highlighter-rouge">initialize</code> function is the constructor of the class.</p>
+
+<p><img src="/images/reversing-crystal/constructor.png" alt="ida_hello2" /></p>
+
+<p>As you can see in this basic block, memory is created for our new object using <code class="highlighter-rouge">_crystal_malloc_antomic64</code> function, a wrapper for <code class="highlighter-rouge">GC_generic_malloc</code> which, after lot of operations, is a malloc itself.</p>
+
+<p>Then, a <code class="highlighter-rouge">call test_random</code> is done, remember, Crystal compiler does not strip binaries by default so function names remain intact.</p>
+
+<p><img src="/images/reversing-crystal/test_random.png" alt="ida_hello2" /></p>
+
+<p>Here it is our conditional, and our <code class="highlighter-rouge">puts</code> calls on each condition. Cool!</p>
+
+<p>Radare2, show us function names processed, so it’s a bit easier to identify the binary work flow with a single <code class="highlighter-rouge">s sym.__crystal_main</code> <code class="highlighter-rouge">pdf</code> call.</p>
+
+<p><img src="/images/reversing-crystal/r2.png" alt="ida_hello2" /></p>
+
+<p>That’s all, thanks for reading, and hope this post can be helpful for someone facing this kind of binaries for the first time.</p>
+
+<p>Please, feel free to contact me if you see any mistake, also my written english is not the best, so sorry for those whose eyes explode while reading this.</p>
+
+<p>See you!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
