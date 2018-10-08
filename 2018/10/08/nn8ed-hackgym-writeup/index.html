@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] nn8ed HackGym challenge write-up.</title>
+  <meta name="description" content="This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This pwn challenge has the following statement:">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2018/10/08/nn8ed-hackgym-writeup/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] nn8ed HackGym challenge write-up.">
+  <meta name="twitter:description" content="This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This pwn challenge has the following statement:">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] nn8ed HackGym challenge write-up.</h1>
+    
+    <p class="post-meta"><time datetime="2018-10-08T13:01:44+01:00" itemprop="datePublished">Oct 8, 2018</time> •
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/php/">php</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/exploiting/">exploiting</a>
+      
+    
+      
+    
+      
+    
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This weekend, Navaja Negra 8 CTF started, organized by <a href="https://www.twitter.com/ka0labs_">ka0labs.org</a>. This pwn challenge has the following statement:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Say the magic word to get the flag!
+
+http://hackgym.ka0labs.org
+</code></pre></div></div>
+
+<p>The provided website is a phpinfo() output from the server, but with a string at the beginning.</p>
+
+<p><img src="/images/nn8ed-hackgym/default.png" alt="lot_of_functions" /></p>
+
+<p>As you can see, ka0labs team is formed by dick-painter teenagers. Ok let’s see what’s in the PHP Information. Scrolling down a bit, we can see an extension <code class="highlighter-rouge">HackGym</code> is loaded.</p>
+
+<p><img src="/images/nn8ed-hackgym/extension.png" alt="extension" /></p>
+
+<p>At this point, a hint is released: Look at the HTML source code. And there it is, there’s a comment at the bottom of the HTML leaking a backup path for the loaded extension.</p>
+
+<p><img src="/images/nn8ed-hackgym/LEAK.png" alt="leak" /></p>
+
+<p>Well, let’s download the shared object and open it using IDA and see what funcions we have:</p>
+
+<p><img src="/images/nn8ed-hackgym/funciones.png" alt="ida_functions" /></p>
+
+<p>If you have some PHP extensions background, you can easily identify what this functions are. For those newbies on PHP internals, there are a few functions PHP use when loading extensions, you can read more about this, from an offensive perspective in: <a href="https://www.tarlogic.com/en/blog/backdoors-php-extensions/">https://www.tarlogic.com/en/blog/backdoors-php-extensions/</a></p>
+
+<p>TL;DR: PHP_FUNCTION function is where extension functions are defined.</p>
+
+<p>So let’s analyze the PHP_FUNCION (seems to be a typo, it should be “FUNCTION”) and see what this function does.</p>
+
+<p><img src="/images/nn8ed-hackgym/lot_stuff.png" alt="ida_lot_stuff" /></p>
+
+<p>Ok lot of stuff, the interesting part is here</p>
+
+<p><img src="/images/nn8ed-hackgym/php_funcion.png" alt="ida_php_funcion" /></p>
+
+<p>This function is taking the X-Forwarded-For HTTP header, and passing it to <code class="highlighter-rouge">kaboom</code> function, so let’s see what this function does:</p>
+
+<p><img src="/images/nn8ed-hackgym/kaboom.png" alt="ida_php_funcion" /></p>
+
+<p>In the first basic block, this function is taking our input, which is 256 bytes long, and writing it to a variable, there’s is another 256 bytes buffer containing the <code class="highlighter-rouge">8=====&gt; ! JE! Target! 3%</code> string. The next basic block, overwrites our buffer with this dick string.</p>
+
+<p>On the third basic block, <code class="highlighter-rouge">_ap_php_snprintf</code>, a wrapper in PHP for <code class="highlighter-rouge">snprintf</code> function is called passing our overwritten buffer as argument. There’s more, the string of the placeholder will be <code class="highlighter-rouge">nn8ed{...}</code>. But wait, what placeholder string?</p>
+
+<p><code class="highlighter-rouge">snprintf</code> function works like this, you specify a string which is kind of a template string, and inside this template, you can specify placeholders which are going to be replaced based on what you indicate. For example:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">char</span> <span class="n">destination</span><span class="p">[</span><span class="mi">256</span><span class="p">];</span>
+<span class="kt">char</span> <span class="o">*</span> <span class="n">name</span> <span class="o">=</span> <span class="s">"Gonzalo"</span><span class="p">;</span>
+<span class="n">snprintf</span><span class="p">(</span><span class="n">destination</span><span class="p">,</span><span class="mi">256</span><span class="p">,</span><span class="s">"Hi my name is %s"</span><span class="p">,</span> <span class="n">name</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Will write the <code class="highlighter-rouge">destination</code> variable with <code class="highlighter-rouge">"Hi my name is Gonzalo"</code> string. Ok, do you remember that the replace string ended with a <code class="highlighter-rouge">%</code>? Din din din! We need to force the final string to end up in “s”, so the template string passed to <code class="highlighter-rouge">snprintf</code> will be  <code class="highlighter-rouge">8=====&gt; ! JE! Target! 3%s</code> and the flag is going to be replaced as <code class="highlighter-rouge">%s</code> so the placeholder is replaced as seen in the example.</p>
+
+<p>Let’s test:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GET / HTTP/1.0
+Host: hackgym.ka0labs.org
+X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>200 OK
+
+8===D ! JE! Target! 3nn8ed{Th3_r1ght_f0rm4t_Off_by_1}
+</code></pre></div></div>
+
+<p>Win! The flag is returned at the beginning of the HTML as expected.</p>
+
+<p>This challenge was easy for those people who know about format string bugs and PHP extensions, for those not so used to work with exploiting challenges or PHP extensions, is a great challenge to know some basics about it.</p>
+
+<p>Congratz to ka0labs.org team and Navaja Negra.</p>
+
+<p>See you!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

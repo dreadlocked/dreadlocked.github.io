@@ -5,7 +5,7 @@
   
   <link href="/feed.xml" rel="self" type="application/atom+xml" />
   <link href="/" rel="alternate" type="text/html" />
-  <updated>2018-10-08T14:10:35+01:00</updated>
+  <updated>2018-10-08T17:26:57+01:00</updated>
   <id>//</id>
 
   
@@ -152,6 +152,115 @@
 
       
         <summary type="html">Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+  
+    <entry>
+      
+      <title type="html">[CTF Write-up] nn8ed HackGym challenge write-up.</title>
+      
+      
+      <link href="/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
+      
+      <published>2018-10-08T13:01:44+01:00</published>
+      <updated>2018-10-08T13:01:44+01:00</updated>
+      <id>/2018/10/08/nn8ed-hackgym-writeup</id>
+      <content type="html" xml:base="/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Say the magic word to get the flag!
+
+http://hackgym.ka0labs.org
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The provided website is a phpinfo() output from the server, but with a string at the beginning.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/default.png&quot; alt=&quot;lot_of_functions&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;As you can see, ka0labs team is formed by dick-painter teenagers. Ok let’s see what’s in the PHP Information. Scrolling down a bit, we can see an extension &lt;code class=&quot;highlighter-rouge&quot;&gt;HackGym&lt;/code&gt; is loaded.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/extension.png&quot; alt=&quot;extension&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;At this point, a hint is released: Look at the HTML source code. And there it is, there’s a comment at the bottom of the HTML leaking a backup path for the loaded extension.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/LEAK.png&quot; alt=&quot;leak&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Well, let’s download the shared object and open it using IDA and see what funcions we have:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/funciones.png&quot; alt=&quot;ida_functions&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;If you have some PHP extensions background, you can easily identify what this functions are. For those newbies on PHP internals, there are a few functions PHP use when loading extensions, you can read more about this, from an offensive perspective in: &lt;a href=&quot;https://www.tarlogic.com/en/blog/backdoors-php-extensions/&quot;&gt;https://www.tarlogic.com/en/blog/backdoors-php-extensions/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;TL;DR: PHP_FUNCTION function is where extension functions are defined.&lt;/p&gt;
+
+&lt;p&gt;So let’s analyze the PHP_FUNCION (seems to be a typo, it should be “FUNCTION”) and see what this function does.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/lot_stuff.png&quot; alt=&quot;ida_lot_stuff&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Ok lot of stuff, the interesting part is here&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/php_funcion.png&quot; alt=&quot;ida_php_funcion&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;This function is taking the X-Forwarded-For HTTP header, and passing it to &lt;code class=&quot;highlighter-rouge&quot;&gt;kaboom&lt;/code&gt; function, so let’s see what this function does:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/images/nn8ed-hackgym/kaboom.png&quot; alt=&quot;ida_php_funcion&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;In the first basic block, this function is taking our input, which is 256 bytes long, and writing it to a variable, there’s is another 256 bytes buffer containing the &lt;code class=&quot;highlighter-rouge&quot;&gt;8=====&amp;gt; ! JE! Target! 3%&lt;/code&gt; string. The next basic block, overwrites our buffer with this dick string.&lt;/p&gt;
+
+&lt;p&gt;On the third basic block, &lt;code class=&quot;highlighter-rouge&quot;&gt;_ap_php_snprintf&lt;/code&gt;, a wrapper in PHP for &lt;code class=&quot;highlighter-rouge&quot;&gt;snprintf&lt;/code&gt; function is called passing our overwritten buffer as argument. There’s more, the string of the placeholder will be &lt;code class=&quot;highlighter-rouge&quot;&gt;nn8ed{...}&lt;/code&gt;. But wait, what placeholder string?&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;snprintf&lt;/code&gt; function works like this, you specify a string which is kind of a template string, and inside this template, you can specify placeholders which are going to be replaced based on what you indicate. For example:&lt;/p&gt;
+
+&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;destination&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;256&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;];&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;Gonzalo&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;snprintf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;destination&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;256&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;Hi my name is %s&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Will write the &lt;code class=&quot;highlighter-rouge&quot;&gt;destination&lt;/code&gt; variable with &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;Hi my name is Gonzalo&quot;&lt;/code&gt; string. Ok, do you remember that the replace string ended with a &lt;code class=&quot;highlighter-rouge&quot;&gt;%&lt;/code&gt;? Din din din! We need to force the final string to end up in “s”, so the template string passed to &lt;code class=&quot;highlighter-rouge&quot;&gt;snprintf&lt;/code&gt; will be  &lt;code class=&quot;highlighter-rouge&quot;&gt;8=====&amp;gt; ! JE! Target! 3%s&lt;/code&gt; and the flag is going to be replaced as &lt;code class=&quot;highlighter-rouge&quot;&gt;%s&lt;/code&gt; so the placeholder is replaced as seen in the example.&lt;/p&gt;
+
+&lt;p&gt;Let’s test:&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;GET / HTTP/1.0
+Host: hackgym.ka0labs.org
+X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;200 OK
+
+8===D ! JE! Target! 3nn8ed{Th3_r1ght_f0rm4t_Off_by_1}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Win! The flag is returned at the beginning of the HTML as expected.&lt;/p&gt;
+
+&lt;p&gt;This challenge was easy for those people who know about format string bugs and PHP extensions, for those not so used to work with exploiting challenges or PHP extensions, is a great challenge to know some basics about it.&lt;/p&gt;
+
+&lt;p&gt;Congratz to ka0labs.org team and Navaja Negra.&lt;/p&gt;
+
+&lt;p&gt;See you!&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="ctf" />
+      
+        <category term="php" />
+      
+        <category term="exploiting" />
+      
+
+      
+
+      
+        <summary type="html">This weekend, Navaja Negra 8 CTF started, organized by ka0labs.org. This pwn challenge has the following statement:</summary>
       
 
       

@@ -5,6 +5,10 @@
 <lastmod>2018-10-08T13:00:44+01:00</lastmod>
 </url>
 <url>
+<loc>/2018/10/08/nn8ed-hackgym-writeup/</loc>
+<lastmod>2018-10-08T13:01:44+01:00</lastmod>
+</url>
+<url>
 <loc>/2018/10/08/reversing-crystal-binaries/</loc>
 <lastmod>2018-10-08T13:02:44+01:00</lastmod>
 </url>
@@ -34,6 +38,12 @@
 </url>
 <url>
 <loc>/categories/unicode/</loc>
+</url>
+<url>
+<loc>/categories/php/</loc>
+</url>
+<url>
+<loc>/categories/exploiting/</loc>
 </url>
 <url>
 <loc>/categories/reversing/</loc>
