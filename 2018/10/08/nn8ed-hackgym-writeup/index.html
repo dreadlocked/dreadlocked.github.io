@@ -182,9 +182,9 @@ http://hackgym.ka0labs.org
 
 <p>If you have some PHP extensions background, you can easily identify what this functions are. For those newbies on PHP internals, there are a few functions PHP use when loading extensions, you can read more about this, from an offensive perspective in: <a href="https://www.tarlogic.com/en/blog/backdoors-php-extensions/">https://www.tarlogic.com/en/blog/backdoors-php-extensions/</a></p>
 
-<p>TL;DR: PHP_FUNCTION function is where extension functions are defined.</p>
+<p>TL;DR: PHP_FUNCTION macro is where extension functions are defined.</p>
 
-<p>So let’s analyze the PHP_FUNCION (seems to be a typo, it should be “FUNCTION”) and see what this function does.</p>
+<p>So let’s analyze the PHP_FUNCION function, which really should be a <code class="highlighter-rouge">PHP_FUNCTION</code> macro, but for readability reasons, it’s badly written on purpose.</p>
 
 <p><img src="/images/nn8ed-hackgym/lot_stuff.png" alt="ida_lot_stuff" /></p>
 
