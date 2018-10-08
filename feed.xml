@@ -5,7 +5,7 @@
   
   <link href="/feed.xml" rel="self" type="application/atom+xml" />
   <link href="/" rel="alternate" type="text/html" />
-  <updated>2018-10-08T13:38:29+01:00</updated>
+  <updated>2018-10-08T14:02:01+01:00</updated>
   <id>//</id>
 
   
@@ -174,6 +174,8 @@
 
 &lt;p&gt;Get the admin password! There is a WAF and it is NodeJS… Easy peasy!
 &lt;a href=&quot;http://tindermon.ka0labs.org/&quot;&gt;http://tindermon.ka0labs.org&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Solution script: &lt;a href=&quot;https://github.com/dreadlocked/ctf-writeups/blob/master/nn8ed/tindermon.rb&quot;&gt;https://github.com/dreadlocked/ctf-writeups/blob/master/nn8ed/tindermon.rb&lt;/a&gt;&lt;/p&gt;
 
 &lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
 &lt;p&gt;This challenge presents us a classic NodeJS + Express app. Source code of index is:&lt;/p&gt;
