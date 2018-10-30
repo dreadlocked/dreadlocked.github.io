@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)</title>
+  <meta name="description" content="Last week, Secadmin conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2018/10/08/secadmin-reversing-writeup/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)">
+  <meta name="twitter:description" content="Last week, Secadmin conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)</h1>
+    
+    <p class="post-meta"><time datetime="2018-10-08T13:02:44+01:00" itemprop="datePublished">Oct 8, 2018</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/reversing/">reversing</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/secadmin/">secadmin</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>Last week, <a href="https://www.secadmin.es/">Secadmin</a> conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.</p>
+
+<p>The challenge has a long statement, in summary, they let you a binary and you need to reverse it to obtain the flag. Go go go go!</p>
+
+<p>First is first, execute the binary and see what it does. When executing, it ask you for the flag, then wait some time and then, if wrong (obviosly, the first try will be wrong), the program tells you need some “Cruzcampo” (possibly the worst Spanish beer ever).</p>
+
+<p><img src="/images/secadmin/execute.png" alt="execute" /></p>
+
+<p>A <code class="highlighter-rouge">file</code> to the binary outputs that binary is not stripped, so functions and some variable names will remain, cool for our purpose.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ file secadmin_ctf
+
+secadmin_ctf: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), 
+dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, 
+BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
+</code></pre></div></div>
+<h4 id="binary-analysis-using-cutter">Binary analysis, using Cutter!</h4>
+
+<p>This time I’ll not use IDA to analyse the binary, let’s use <a href="https://github.com/radareorg/cutter">Cutter</a>, a QT based multiplatform GUI for <a href="https://rada.re/r/">radare2</a>, really cool project started by the great Hugo Teso as <a href="https://github.com/hteso/iaito">Iato</a> and currently mantained (as Cutter) by a lot of great radare2 community people.</p>
+
+<p>Opening the binary using Cutter, shows us at first some useful information about the binary compilation flags.</p>
+
+<p><img src="/images/secadmin/dashboard.png" alt="dashboard" /></p>
+
+<p>Not really so much information as the <code class="highlighter-rouge">file</code> command, but adds some information useful from an exploting perspective, such as Canary stack protection, NX bit, PIE and RELRO flags.</p>
+
+<p>Well, the next step is review the binary functions, as this binary is not stripped, function names remain and it’s easier for us to identify each one.</p>
+
+<p><img src="/images/secadmin/functions.png" alt="functions" /></p>
+
+<p>Starting from <code class="highlighter-rouge">main</code> function, let’s see what it does. As I previosly executed the binary to see the execution flow, it’s expected to see some header print, then print “Introduce tu flag…”, and gets the user STDIN input, and then process that input. This last “process” is the interesting part.</p>
+
+<p>Here’s the dissembly of the interesting part:</p>
+
+<p><img src="/images/secadmin/main.png" alt="main" /></p>
+
+<p>Ok, as you can see, <code class="highlighter-rouge">obj.flag</code> is the variable where the user input will be stored using <code class="highlighter-rouge">scanf</code> (yep, there’s a stack buffer overflow here). Then, “Espere unos instantes” message is displayed and <code class="highlighter-rouge">obj.flag</code> is stored on an auxiliar variable <code class="highlighter-rouge">obj.msg</code>.</p>
+
+<p>Here comes the interesting part, three functions are called on different threads using the <code class="highlighter-rouge">pthread_create</code> C function. This function calls another function and its parameters and execute it on a new thread. Debug threads using raw GDB can be a headache.</p>
+
+<p>At the end, it compares the <code class="highlighter-rouge">obj.s</code> global string with <code class="highlighter-rouge">obj.j</code> global string, so it’s expected that our initial string is going to be transformed and stored in <code class="highlighter-rouge">obj.j</code> and then compared with the transformed flag, stored in <code class="highlighter-rouge">obj.s</code>.</p>
+
+<p>Taking a look to <code class="highlighter-rouge">obj.s</code> global variable, we can see it’s initialized with 22 bytes. To do this, just double click over any <code class="highlighter-rouge">obj.s</code> reference, and then, select the “Hexdump” tab.</p>
+
+<p><img src="/images/secadmin/s_hex.png" alt="s" /></p>
+
+<p>Seems like we need to input something that end up beeing like <code class="highlighter-rouge">obj.s</code> bytes, so first hint, our input needs to be 22 bytes long, and probably starting with the flag format <code class="highlighter-rouge">secadmin{</code>.</p>
+
+<p>Let’s first analyze the <code class="highlighter-rouge">sym.timer</code>, <code class="highlighter-rouge">sym.tr1</code> and <code class="highlighter-rouge">sym.tr2</code> functions, and see what they do.</p>
+
+<h4 id="timer-function">“timer” function</h4>
+
+<p>Let’s analyze first, the <code class="highlighter-rouge">sym.timer</code> function, which is the first function called.</p>
+
+<p><img src="/images/secadmin/timer.png" alt="timer" /></p>
+
+<p>This function basically loops indefinitely, increasing the value of <code class="highlighter-rouge">obj.tiempo</code> variable by one each time, but before this, it calls <code class="highlighter-rouge">usleep</code> C function, passing it <code class="highlighter-rouge">0xf4240</code> as parameter. If you don’t know, usleep function will sleep the thread N microseconds. <code class="highlighter-rouge">0xf4240</code> is the hex representation of the decimal <code class="highlighter-rouge">1000000</code>, which in seconds is 1 second.</p>
+
+<p>So this function, increase the value of the global variable <code class="highlighter-rouge">obj.tiempo</code> by one each one second.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">timer</span><span class="p">(){</span>
+  <span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">usleep</span><span class="p">(</span><span class="mi">1000000</span><span class="p">);</span> <span class="c1">// 1 second</span>
+    <span class="o">++</span><span class="n">tiempo</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<h4 id="tr1-function">“tr1” function</h4>
+
+<p>Then, let’s analyze first, the <code class="highlighter-rouge">sym.tr1</code> function, which is the second function called.</p>
+
+<p><img src="/images/secadmin/tr1.png" alt="tr1" /></p>
+
+<p>Easy flow here, first, the length of <code class="highlighter-rouge">obj.msg</code> (which is our input) is calculated, and we iterate from <code class="highlighter-rouge">i=0</code> to <code class="highlighter-rouge">i&lt;strlen(obj.msg)</code>. Inside the for loop, the application xors each byte of the user input string, with it’s user input length and stores the result on another global variable <code class="highlighter-rouge">obj.j</code>. Then sleeps <code class="highlighter-rouge">0x30d40</code> microseconds, wich in decimal seconds corresponds with 0.2 seconds.</p>
+
+<p>The C code will look like the following:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="n">tr1</span><span class="p">(){</span>
+  <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">strlen</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span> <span class="o">++</span><span class="n">i</span><span class="p">){</span>
+    <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="n">strlen</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span>
+    <span class="n">usleep</span><span class="p">(</span><span class="mi">200000</span><span class="p">);</span> <span class="c1">// 0.2 segundos</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="tr2-function">“tr2” function</h4>
+<p>Last function called is tr2, let’s see what this function does.</p>
+
+<p><img src="/images/secadmin/tr2.png" alt="tr2" /></p>
+
+<p>Uuuh, really similar to the tr1 function right? This function also calculates the strlen of the user input and iterate from 0 to user input string length too. But this time the xor formula changes and it sleeps 0.4 seconds insted of 0.2.</p>
+
+<p>This time, this function does not take the user input as a xor parameter, it uses <code class="highlighter-rouge">obj.j</code> instead, xored with a <code class="highlighter-rouge">obj.t</code> array and <code class="highlighter-rouge">0x80</code>, the xor formula pseudocode is as follows:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="n">t</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">tiempo</span><span class="p">]</span> <span class="o">^</span> <span class="mh">0x80</span>
+</code></pre></div></div>
+
+<p>If you remember, <code class="highlighter-rouge">j</code> is a global variable where <code class="highlighter-rouge">tr1</code> will write the result of its xor function, then <code class="highlighter-rouge">tiempo</code> is another global variable wich will increase by one each second. As <code class="highlighter-rouge">tr1</code>, <code class="highlighter-rouge">tr2</code> and <code class="highlighter-rouge">timer</code> functions are in different threads, this values will increase asynchronously.</p>
+
+<h4 id="solving-the-equations">Solving the equations.</h4>
+
+<p>Been this a short program, we can reconstruct it’s C code, to avoid dealing with GDB debugging over threads and time dependant variables, it’s easier for me to do it this way.</p>
+
+<p>Here’s the C code:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+</span>
+<span class="kt">int</span> <span class="n">tiempo</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">const</span> <span class="kt">char</span> <span class="n">s</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="mh">0x91</span><span class="p">,</span><span class="mh">0x87</span><span class="p">,</span><span class="mh">0xEE</span><span class="p">,</span><span class="mh">0xEC</span><span class="p">,</span><span class="mh">0x2C</span><span class="p">,</span><span class="mh">0x25</span><span class="p">,</span><span class="mh">0x21</span><span class="p">,</span><span class="mh">0x0e</span><span class="p">,</span><span class="mh">0x1b</span><span class="p">,</span><span class="mh">0xa5</span><span class="p">,</span><span class="mh">0xc0</span><span class="p">,</span><span class="mh">0x9c</span><span class="p">,</span><span class="mh">0x2e</span><span class="p">,</span><span class="mh">0x42</span><span class="p">,</span><span class="mh">0xfd</span><span class="p">,</span><span class="mh">0xbf</span><span class="p">,</span><span class="mh">0x93</span><span class="p">,</span><span class="mh">0x96</span><span class="p">,</span><span class="mh">0xc1</span><span class="p">,</span><span class="mh">0xce</span><span class="p">,</span><span class="mh">0xc6</span><span class="p">,</span><span class="mh">0xdf</span><span class="p">};</span>
+<span class="k">const</span> <span class="kt">char</span> <span class="n">t</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="mh">0x74</span><span class="p">,</span> <span class="mh">0x5A</span><span class="p">,</span> <span class="mh">0x1B</span><span class="p">,</span> <span class="mh">0x67</span><span class="p">,</span> <span class="mh">0xde</span><span class="p">,</span> <span class="mh">0x34</span><span class="p">,</span> <span class="mh">0xf6</span><span class="p">,</span> <span class="mh">0x34</span><span class="p">,</span> <span class="mh">0x67</span><span class="p">,</span> <span class="mh">0x5A</span><span class="p">,</span> <span class="mh">0x8B</span><span class="p">,</span> <span class="mh">0x74</span><span class="p">,</span> <span class="mh">0x5A</span><span class="p">,</span> <span class="mh">0x1B</span><span class="p">,</span> <span class="mh">0x67</span><span class="p">,</span> <span class="mh">0xDE</span><span class="p">,</span> <span class="mh">0x34</span><span class="p">,</span> <span class="mh">0xF6</span><span class="p">,</span> <span class="mh">0x34</span><span class="p">,</span> <span class="mh">0x67</span><span class="p">,</span> <span class="mh">0x5A</span><span class="p">,</span> <span class="mh">0x8B</span><span class="p">,</span> <span class="mh">0x31</span><span class="p">,</span> <span class="mh">0x3B</span><span class="p">,</span> <span class="mh">0x36</span><span class="p">,</span> <span class="mh">0x30</span><span class="p">,</span> <span class="mh">0x2C</span><span class="p">,</span> <span class="mh">0x03</span><span class="p">,</span> <span class="mh">0x3F</span><span class="p">,</span> <span class="mh">0x66</span><span class="p">,</span> <span class="mh">0x24</span><span class="p">,</span> <span class="mh">0x08</span><span class="p">,</span> <span class="mh">0x66</span><span class="p">,</span> <span class="mh">0x24</span><span class="p">,</span> <span class="mh">0x08</span><span class="p">,</span> <span class="mh">0x39</span><span class="p">,</span> <span class="mh">0x67</span><span class="p">,</span> <span class="mh">0x23</span><span class="p">,</span> <span class="mh">0x08</span><span class="p">,</span> <span class="mh">0x24</span><span class="p">,</span> <span class="mh">0x36</span><span class="p">,</span> <span class="mh">0x39</span><span class="p">,</span> <span class="mh">0x64</span><span class="p">,</span> <span class="mh">0x2A</span><span class="p">,</span> <span class="mh">0x54</span><span class="p">};</span>
+<span class="kt">char</span> <span class="o">*</span><span class="n">msg</span> <span class="o">=</span> <span class="s">"secadmin{AAAAAAAAAAAA}"</span><span class="p">;</span>
+<span class="kt">char</span> <span class="n">j</span><span class="p">[</span><span class="mi">64</span><span class="p">];</span>
+
+<span class="kt">void</span> <span class="nf">timer</span><span class="p">(){</span>
+  <span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">usleep</span><span class="p">(</span><span class="mi">1000000</span><span class="p">);</span> <span class="c1">// 1 segundo</span>
+    <span class="o">++</span><span class="n">tiempo</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="o">*</span> <span class="n">tr1</span><span class="p">(){</span>
+  <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">strlen</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span> <span class="o">++</span><span class="n">i</span><span class="p">){</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"TR1 -&gt; 0x%02x ^ 22</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="n">msg</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+    <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="n">strlen</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"TR1 -&gt; j[%d] = 0x%02x</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+    <span class="n">usleep</span><span class="p">(</span><span class="mi">200000</span><span class="p">);</span> <span class="c1">// 0.2 segundos</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="mi">0LL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="o">*</span> <span class="n">tr2</span><span class="p">(){</span>
+  <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+  <span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="p">;</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">strlen</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span> <span class="o">++</span><span class="n">i</span><span class="p">){</span>
+    <span class="n">usleep</span><span class="p">(</span><span class="mi">400000</span><span class="p">);</span> <span class="c1">// 0.4 segundos</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"TR2 -&gt; 0x%02x = 0x%02x ^ 0x%02x ^ 0x80"</span><span class="p">,</span><span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">t</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">tiempo</span><span class="p">]);</span>
+    <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="n">t</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">tiempo</span><span class="p">]</span> <span class="o">^</span> <span class="mh">0x80</span><span class="p">;</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">" -&gt; 0x%2x</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">j</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="mi">0LL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="n">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="k">const</span> <span class="o">*</span><span class="n">argv</span><span class="p">[])</span>
+<span class="p">{</span>
+  <span class="n">pthread_t</span> <span class="n">tr1_t</span><span class="p">;</span>
+  <span class="n">pthread_t</span> <span class="n">tr2_t</span><span class="p">;</span>
+  <span class="n">pthread_t</span> <span class="n">timer_t</span><span class="p">;</span>
+  <span class="n">puts</span><span class="p">(</span><span class="s">"Starting! ..."</span><span class="p">);</span>
+  <span class="n">printf</span><span class="p">(</span><span class="s">"Size of s: %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="k">sizeof</span><span class="p">(</span><span class="n">s</span><span class="p">));</span>
+  <span class="n">fflush</span><span class="p">(</span><span class="n">stdin</span><span class="p">);</span>
+
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">timer_t</span><span class="p">,</span><span class="mi">0LL</span><span class="p">,(</span><span class="kt">void</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="p">)(</span><span class="kt">void</span> <span class="o">*</span><span class="p">))</span><span class="n">timer</span><span class="p">,</span><span class="mi">0LL</span><span class="p">);</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tr1_t</span><span class="p">,</span><span class="mi">0LL</span><span class="p">,</span><span class="n">tr1</span><span class="p">,</span><span class="mi">0LL</span><span class="p">);</span>
+  <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tr1_t</span><span class="p">,</span><span class="mi">0LL</span><span class="p">,</span><span class="n">tr2</span><span class="p">,</span><span class="mi">0LL</span><span class="p">);</span>
+
+  <span class="n">usleep</span><span class="p">(</span><span class="mi">13000000</span><span class="p">);</span>
+  <span class="n">printf</span><span class="p">(</span><span class="s">"s: %s"</span><span class="p">,</span><span class="n">j</span><span class="p">);</span>
+
+  <span class="n">printf</span><span class="p">(</span><span class="s">"sizeof j: %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,(</span><span class="kt">int</span><span class="p">)</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">j</span><span class="p">));</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">strcmp</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="n">s</span><span class="p">)){</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"Wiiiiiiiin!!"</span><span class="p">);</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"Looooooose!!"</span><span class="p">);</span>
+  <span class="p">}</span>
+
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>When executed, we obtain the following output, which clears us what the program is doing:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Starting! ...
+Size of s: 22
+TR1 -&gt; 0x73 ^ 22
+TR1 -&gt; j[0] = 0x65
+TR1 -&gt; 0x65 ^ 22
+TR1 -&gt; j[1] = 0x73
+
+TR2 -&gt; 0x65 = 0x65 ^ 0x74 ^ 0x80 -&gt; 0xffffff91
+
+TR1 -&gt; 0x63 ^ 22
+TR1 -&gt; j[2] = 0x75
+TR1 -&gt; 0x61 ^ 22
+TR1 -&gt; j[3] = 0x77
+
+TR2 -&gt; 0x73 = 0x73 ^ 0x74 ^ 0x80 -&gt; 0xffffff87
+
+TR1 -&gt; 0x64 ^ 22
+TR1 -&gt; j[4] = 0x72
+TR1 -&gt; 0x6d ^ 22
+TR1 -&gt; j[5] = 0x7b
+
+TR2 -&gt; 0x75 = 0x75 ^ 0x1b ^ 0x80 -&gt; 0xffffffee
+
+TR1 -&gt; 0x69 ^ 22
+TR1 -&gt; j[6] = 0x7f
+TR1 -&gt; 0x6e ^ 22
+TR1 -&gt; j[7] = 0x78
+
+TR2 -&gt; 0x77 = 0x77 ^ 0x1b ^ 0x80 -&gt; 0xffffffec
+
+TR1 -&gt; 0x7b ^ 22
+TR1 -&gt; j[8] = 0x6d
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[9] = 0x57
+
+TR2 -&gt; 0x72 = 0x72 ^ 0xffffffde ^ 0x80 -&gt; 0x2c
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[10] = 0x57
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[11] = 0x57
+
+TR2 -&gt; 0x7b = 0x7b ^ 0xffffffde ^ 0x80 -&gt; 0x25
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[12] = 0x57
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[13] = 0x57
+
+TR2 -&gt; 0x7f = 0x7f ^ 0xffffffde ^ 0x80 -&gt; 0x21
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[14] = 0x57
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[15] = 0x57
+
+TR2 -&gt; 0x78 = 0x78 ^ 0xfffffff6 ^ 0x80 -&gt; 0x e
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[16] = 0x57
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[17] = 0x57
+
+TR2 -&gt; 0x6d = 0x6d ^ 0xfffffff6 ^ 0x80 -&gt; 0x1b
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[18] = 0x57
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[19] = 0x57
+
+TR2 -&gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&gt; 0xffffffb0
+
+TR1 -&gt; 0x41 ^ 22
+TR1 -&gt; j[20] = 0x57
+TR1 -&gt; 0x7d ^ 22
+TR1 -&gt; j[21] = 0x6b
+
+TR2 -&gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&gt; 0xffffffb0
+...
+
+</code></pre></div></div>
+
+<p>It’s easy to see the pattern, right? <code class="highlighter-rouge">tr1</code> creates two new bytes on <code class="highlighter-rouge">obj.j</code> global variable, and then <code class="highlighter-rouge">tr2</code> takes one byte, transform it using <code class="highlighter-rouge">t[2*tiempo]</code> value.</p>
+
+<p>As you can see, our input (the <code class="highlighter-rouge">msg</code> variable), when transformed by <code class="highlighter-rouge">tr2</code> needs to be equal to <code class="highlighter-rouge">s</code> variable byte by byte. We guessed that <code class="highlighter-rouge">msg</code> should start with <code class="highlighter-rouge">secadmin{</code> as this is the flag format of the challenges. If you take a look, first <code class="highlighter-rouge">s</code> variable bytes are: <code class="highlighter-rouge">0x91,0x87,0xEE,0xEC,0x2C,0x25,0x21,0x0e,0x1b</code>, and our <code class="highlighter-rouge">tr2</code> function output is doing it correctly! This confirms that our guess was correct, and also means that the last character of <code class="highlighter-rouge">msg</code> might be <code class="highlighter-rouge">}</code>.</p>
+
+<p>Well, we just need to find which ascii values satisfies the formula for this string <code class="highlighter-rouge">secadmin{AAAAAAAAAAAA}</code>, been each <code class="highlighter-rouge">A</code>, a value to guess.</p>
+
+<p>As you can see, <code class="highlighter-rouge">t[2*tiempo]</code> follows always the same pattern, so with a simple ruby script, we can guess this characters:</p>
+
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">t</span> <span class="o">=</span> <span class="p">[</span><span class="mh">0x67</span><span class="p">,</span><span class="mh">0x67</span><span class="p">,</span><span class="mh">0x67</span><span class="p">,</span><span class="mh">0x8b</span><span class="p">,</span><span class="mh">0x8b</span><span class="p">,</span><span class="mh">0x5a</span><span class="p">,</span><span class="mh">0x5a</span><span class="p">,</span><span class="mh">0x5a</span><span class="p">,</span><span class="mh">0x67</span><span class="p">,</span><span class="mh">0x67</span><span class="p">,</span><span class="mh">0x34</span><span class="p">,</span><span class="mh">0x34</span><span class="p">,</span><span class="mh">0x34</span><span class="p">]</span>
+<span class="n">s</span> <span class="o">=</span> <span class="p">[</span><span class="mh">0xa5</span><span class="p">,</span><span class="mh">0xc0</span><span class="p">,</span><span class="mh">0x9c</span><span class="p">,</span><span class="mh">0x2e</span><span class="p">,</span><span class="mh">0x42</span><span class="p">,</span><span class="mh">0xfd</span><span class="p">,</span><span class="mh">0xbf</span><span class="p">,</span><span class="mh">0x93</span><span class="p">,</span><span class="mh">0x96</span><span class="p">,</span><span class="mh">0xc1</span><span class="p">,</span><span class="mh">0xce</span><span class="p">,</span><span class="mh">0xc6</span><span class="p">]</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="n">t</span><span class="p">.</span><span class="nf">length</span><span class="o">-</span><span class="mi">1</span>
+  <span class="k">for</span> <span class="n">x</span> <span class="k">in</span> <span class="mh">0x21</span><span class="o">..</span><span class="mh">0x7D</span> <span class="k">do</span>
+    <span class="k">for</span> <span class="n">y</span> <span class="k">in</span> <span class="mh">0x00</span><span class="o">..</span><span class="mh">0xFF</span> <span class="k">do</span>
+      <span class="k">if</span> <span class="p">((</span><span class="n">x</span> <span class="o">^</span> <span class="mi">22</span><span class="p">)</span> <span class="o">^</span> <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="mh">0x80</span><span class="p">)</span> <span class="o">==</span> <span class="n">s</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">then</span>
+        <span class="nb">puts</span> <span class="s2">"x: </span><span class="si">#{</span><span class="n">x</span><span class="p">.</span><span class="nf">chr</span><span class="si">}</span><span class="s2">"</span>
+        <span class="n">i</span><span class="o">+=</span><span class="mi">1</span>
+      <span class="k">end</span>
+    <span class="k">end</span>
+  <span class="k">end</span>
+<span class="k">end</span>
+</code></pre></div></div>
+
+<p>This outputs: <code class="highlighter-rouge">T1m3_1s_g0ld</code>, so the final flag is <code class="highlighter-rouge">secadmin{T1m3_1s_g0ld}</code></p>
+
+<h4 id="final-thoughts">Final thoughts.</h4>
+
+<p>There were, of course, many ways to solve this challenge, this is a simple xor function solving challenge. The threads where an issue when trying to dinamically debug this challenge, because threads will die disallowing us to comfortably debug the binary workflow. That’s why I decided to rewrite the source code based on the assembly, and simply execute it and see the values that <code class="highlighter-rouge">t[2*tiempo]</code> takes along the time, a really lazy solution.</p>
+
+<p>Hope you like it, contact me if you see any mistake. Thanks!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

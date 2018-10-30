@@ -13,6 +13,10 @@
 <lastmod>2018-10-08T13:02:44+01:00</lastmod>
 </url>
 <url>
+<loc>/2018/10/08/secadmin-reversing-writeup/</loc>
+<lastmod>2018-10-08T13:02:44+01:00</lastmod>
+</url>
+<url>
 <loc>/404/</loc>
 </url>
 <url>
@@ -53,5 +57,8 @@
 </url>
 <url>
 <loc>/categories/ruby/</loc>
+</url>
+<url>
+<loc>/categories/secadmin/</loc>
 </url>
 </urlset>
