@@ -202,8 +202,8 @@ pre {
  * Page content
  */
 .page-content {
-  padding-top: 5em;
-  padding: 30px 0; }
+  padding: 30px 0;
+  padding-top: 5em!important; }
 
 .page-heading {
   font-size: 20px; }
