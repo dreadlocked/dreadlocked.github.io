@@ -157,7 +157,12 @@ pre {
  */
 .site-header {
   min-height: 56px;
-  position: relative; }
+  position: relative;
+  box-shadow: 0 4px 12px 0 rgba(0,0,0,.05)!important;
+  position: fixed!important;
+  width: 100%;
+  background: rgba(255,255,255,.97)!important;
+}
 
 .site-title {
   font-size: 26px;
@@ -197,6 +202,7 @@ pre {
  * Page content
  */
 .page-content {
+  padding-top: 5em;
   padding: 30px 0; }
 
 .page-heading {
