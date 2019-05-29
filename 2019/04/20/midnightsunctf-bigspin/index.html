@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)</title>
+  <meta name="description" content="This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="http://localhost:4000/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)">
+  <meta name="twitter:description" content="This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)</h1>
+    
+    <p class="post-meta"><time datetime="2019-04-20T12:00:00+01:00" itemprop="datePublished">Apr 20, 2019</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/nginx/">nginx</a>
+      
+    
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.</p>
+
+<p>The Bigspin challenge, from web cathegory, has the following statement:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>This app got hacked due to admin and uberadmin directories being open. Was just about to wget -r it, but then they fixed it :( Can you help me get the files again?
+
+Service: http://bigspin-01.play.midnightsunctf.se:3123
+
+Author: avlidienbrunn
+</code></pre></div></div>
+
+<h3 id="intro">Intro</h3>
+<p>First is first, let’s see what this application looks like on it’s root path:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;html&gt;</span>
+    What's it gonna be? Are you an 
+    <span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">"/uberadmin/"</span><span class="nt">&gt;</span>uberadmin<span class="nt">&lt;/a&gt;</span>, 
+    an <span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">"/admin/"</span><span class="nt">&gt;</span>admin<span class="nt">&lt;/a&gt;</span>, 
+    a <span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">"/user/"</span><span class="nt">&gt;</span>user<span class="nt">&lt;/a&gt;</span>, 
+    or (most likely) just a <span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">"/pleb/"</span><span class="nt">&gt;</span>pleb<span class="nt">&lt;/a&gt;</span>?
+<span class="nt">&lt;/html&gt;</span>
+</code></pre></div></div>
+<p>Ok so we have four kind of “privilege” levels, and probably we need to reach /uberadmin/ path, cool but, How? Trying to just navigate http://bigspin-01.play.midnightsunctf.se:3123/uberadmin/ shows us an Nginx 403 default error, the same occurs with /user, otherwise, /admin shows a 404. How about /pleb?.</p>
+
+<p>/pleb path returns a 200 OK with the HTML body of http://www.example.com/.</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_1.png" alt="pleb1" /></p>
+
+<p>Usually, when I face Nginx servers on CTFs and in some real-world cases, I instantly think about Nginx-alias path traversal vulenerabilities, so I tested /pleb../ and.. the server returns 502 Bad Gateway error.</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_2.png" alt="pleb2" /></p>
+
+<p>Wait, what? If not vulnerable, it should return 404, if vulnerable it should return 404 or 200, as we are asking for an existing file or path.</p>
+
+<h3 id="13-beating-user-level">1/3 beating user level.</h3>
+<p>Now we have an unexpected behaviour, when the /pleb/ string is present on the path, the server returns the HTML body of example.com, this could be an indicative of <code class="highlighter-rouge">proxy_pass</code> Nginx directive acting as a reverse proxy to www.example.com, but if we add any characters to the end of /pleb, like /plebidiot, the server returns 502, this means that the server is trying to reach www.example.comidiot, as it can’t reach that domain, it returns 502.</p>
+
+<p>Well, so now we know that some kind of SSRF can be done here, my man @dj.thd told us, what if you use a dynamically resolver dns server based on level1 subdomain, and ignoring  other low-level subdomains? Like this www.example.com.127.0.0.1.idiots.com -&gt; 127.0.0.1. Great idea, fortunately for us, there’s a service that does exactly this, nip.io.</p>
+
+<p>So, let’s see what happens, when we try to reach /pleb.127.0.0.1.nip.io/user/,</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_3.png" alt="pleb3" /></p>
+
+<p>Ding ding ding!!! Win!!! We reached /users/ folder, with shows us an Index folder where we can see an “nginx.cönf “ file. To read it, my man @patatasfritas used double URL encoding, as Nginx is not that friendly when trying to read files with special characters.</p>
+
+<p>The nginx.conf file contained the following directives:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> # omited for readability
+
+http {
+
+    # omited for readability
+
+    server {
+        listen 80;
+
+        location / {
+            root /var/www/html/public;
+            try_files $uri $uri/index.html $uri/ =404;
+        }
+
+        location /user {
+            allow 127.0.0.1;
+            deny all;
+            autoindex on;
+            root /var/www/html/;
+        }
+
+        location /admin {
+            internal;
+            autoindex on;
+            alias /var/www/html/admin/;
+        }
+
+        location /uberadmin {
+            allow 0.13.3.7;
+            deny all;
+            autoindex on;
+            alias /var/www/html/uberadmin/;
+        }
+
+        location ~ /pleb([/a-zA-Z0-9.:%]+) {
+            proxy_pass   http://example.com$1;
+        }
+
+        access_log /dev/stdout;
+        error_log /dev/stdout;
+    }
+
+}
+</code></pre></div></div>
+
+<p>Well, see that? /user path can only be reached on localhost, we aimed that using the location /pleb SSRF, pointing a user controlled domain to 127.0.0.1 using nip.io, a classic SSRF tip.</p>
+
+<h3 id="23-beating-admin-level">2/3 beating admin level.</h3>
+<p>Now we need to reach <code class="highlighter-rouge">/admin</code>, it’s configuration is the same, but this time it has an <code class="highlighter-rouge">internal</code> nginx directive, what means internal? Let’s Google a bit:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Specifies that a given location can only be used for internal requests. 
+For external requests, the client error 404 (Not Found) is returned. Internal requests are the following:
+
+-   requests redirected by the error_page, index, random_index, and try_files directives;
+-   requests redirected by the “X-Accel-Redirect” response header field from an upstream server;
+-   subrequests formed by the include virtual command of the  ngx_http_ssi_module  module, by the ngx_http_addition_module module directives,
+and by auth_request and  mirror directives; requests changed by the rewrite directive.
+</code></pre></div></div>
+
+<p>Ok, while reading this snippet of documentation, the <code class="highlighter-rouge">X-Accel-Redirect</code> header shines among so many directives. What if we try to do the same as the previous step, but this time resolving to a user controlled server, which always redirects with <code class="highlighter-rouge">X-Accel-Redirect</code>pointing to <code class="highlighter-rouge">/admin</code>? We can use nip.io again to do this.</p>
+
+<p>First, we need to setup a simple python web server and configure it to always redirect, simple. Then, we try to reach /pleb.X.X.X.X.nip.io, if everything works, the admin folder should be returned and…</p>
+
+<p>Ding ding ding!!! Win!!! Another win, now we can reach /admin location.</p>
+
+<h3 id="33-beating-uberadmin-level">3/3 beating uberadmin level.</h3>
+<p>This level was easy peasy, as when seeing the Nginx configuration file, it highlights the alias traversal on /admin location, so we just need to configure our python server with <code class="highlighter-rouge">X-Accel-Redirect: /admin..uberadmin/flag.txt</code> and…</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_4.png" alt="pleb4" /></p>
+
+<p>Win!!! We got the flag.</p>
+
+<h3 id="final-thoughts">Final thoughts</h3>
+<p>This challenge was really funny, it’s curious how sensitive an Nginx configuration file is. Thanks to @HackingPatatas and @dj.thd for solving this challenge with me.</p>
+
+<p>Feel free to ping me if you see any mistake at @_dreadlocked on twitter.</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="http://localhost:4000/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

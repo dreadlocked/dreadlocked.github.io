@@ -3,10 +3,10 @@
   <generator uri="http://jekyllrb.com" version="3.8.4">Jekyll</generator>
   
   
-  <link href="/feed.xml" rel="self" type="application/atom+xml" />
-  <link href="/" rel="alternate" type="text/html" />
-  <updated>2018-10-30T12:56:19+00:00</updated>
-  <id>//</id>
+  <link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" />
+  <link href="http://localhost:4000/" rel="alternate" type="text/html" />
+  <updated>2019-05-29T10:43:51+01:00</updated>
+  <id>http://localhost:4000//</id>
 
   
     <title type="html">Hans Topo Blog</title>
@@ -22,15 +22,366 @@
   
     <entry>
       
+      <title type="html">[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)</title>
+      
+      
+      <link href="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)" />
+      
+      <published>2019-04-20T13:00:00+01:00</published>
+      <updated>2019-04-20T13:00:00+01:00</updated>
+      <id>http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb</id>
+      <content type="html" xml:base="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
+
+&lt;p&gt;The Cloudb challenge, from web cathegory, has the following statement:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;These guys made a DB in the cloud. Hope it's not a rain cloud...
+
+Service:  [http://cloudb-01.play.midnightsunctf.se](http://cloudb-01.play.midnightsunctf.se/)
+
+Author: avlidienbrunn
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
+&lt;p&gt;Another cloud challenge, I love them! This challenge is about reaching &lt;code class=&quot;highlighter-rouge&quot;&gt;admin&lt;/code&gt; privileges on a Cloud data storage platform.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_1.png&quot; alt=&quot;cloud1&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;The platform lets you upload a profile pic by directly posting it to an Amazon AWS S3 bucket. The upload process consists on two different requests:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;A GET to &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature&lt;/code&gt; path, passing an ACL and a HMAC sign as parameters. This request returns a base64 encoded JSON, with an AWS S3 bucket POST policy:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_3.png&quot; alt=&quot;cloud1&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;The decoded base64:&lt;/p&gt;
+&lt;div class=&quot;language-json highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;expiration&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2019-04-06T14:17:03.000Z&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;conditions&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;content-length-range&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bucket&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cloudb-profilepics&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;acl&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;public-read&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;starts-with&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;$key&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;profilepics/&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;A POST request to the Amazon AWS S3 bucket using the amazon standard for this kind of requests, explained here: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_4.png&quot; alt=&quot;cloud1&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Seems like first we are creating a policy, then using this policy to POST our profile pic to the S3 bucket.&lt;/p&gt;
+
+&lt;p&gt;Our profile pic is saved at &lt;code class=&quot;highlighter-rouge&quot;&gt;/profilepics/idiotsctf@idiots.con/ejemplo.jpeg&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Also, the application lets us request our profile information, at &lt;code class=&quot;highlighter-rouge&quot;&gt;/userinfo/idiotsctf@idiots.com/info.json&lt;/code&gt; endpoint, returning the following JSON:&lt;/p&gt;
+
+&lt;div class=&quot;language-json highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;admin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;profilepic&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;/profilepics/idiotsctf@idiots.com/ejemplo.jpeg&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;hmac&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;427881d9d33e2e619047bbaff90205a6c804524405d3574c8f4dfcabee162788&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;email&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf@idiots.com&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Hmm… that “admin” flag set to &lt;code class=&quot;highlighter-rouge&quot;&gt;false&lt;/code&gt;, seems like we will need to overwrite our &lt;code class=&quot;highlighter-rouge&quot;&gt;/userinfo/idiotsctf@idiots.com/info.json&lt;/code&gt; profile file and set the admin flag to true.&lt;/p&gt;
+
+&lt;h3 id=&quot;understanding-a-bit-how-aws-s3-post-policy-works&quot;&gt;Understanding a bit how AWS S3 POST Policy works.&lt;/h3&gt;
+&lt;p&gt;Before continuing, it’s necesary to understand a bit how AWS S3 policy works. Amazon let developers upload content via POST requests to a S3 bucket. To do this, the developer needs to define a policy parameter for each user upload, this is what the &lt;code class=&quot;highlighter-rouge&quot;&gt;GET /signature&lt;/code&gt; request does.&lt;/p&gt;
+
+&lt;p&gt;That policy controls how much time the client-side has to upload the content, where it’s going to be uploaded, the content type, which bucket is allowed etc.&lt;/p&gt;
+
+&lt;p&gt;The above JSON policy (on Intro), tells:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Your POST upload permission ends at &lt;code class=&quot;highlighter-rouge&quot;&gt;2019-04-06T14:17:03.000Z&lt;/code&gt;&lt;/li&gt;
+  &lt;li&gt;You can upload files between 1 and 10000 bytes length.&lt;/li&gt;
+  &lt;li&gt;You are allowed to upload it to cloudb-profilepics bucket.&lt;/li&gt;
+  &lt;li&gt;Your ACL will be public-read, so everyone can read the content you upload.&lt;/li&gt;
+  &lt;li&gt;And the S3 bucket key where you upload the content, must start with &lt;code class=&quot;highlighter-rouge&quot;&gt;profilepics/&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;the-magic-of-team-work&quot;&gt;The magic of team work.&lt;/h3&gt;
+&lt;p&gt;Phiber, from int3pids is one of our ID10Ts team colleague, he was the first who started working on this challenge. When I woke up, he had some work done over the challenge as he realized &lt;strong&gt;how to inject characters on the S3 policy&lt;/strong&gt; generated by the &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature&lt;/code&gt; controller.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;First he found the secret key which where used to create the sign on the &lt;code class=&quot;highlighter-rouge&quot;&gt;hmac&lt;/code&gt; parameter. That signed the &lt;code class=&quot;highlighter-rouge&quot;&gt;acl&lt;/code&gt; parameter. The key was &lt;code class=&quot;highlighter-rouge&quot;&gt;[object Object]&lt;/code&gt;, literally.&lt;/li&gt;
+  &lt;li&gt;Second, he was able to inject JSON strings on the &lt;code class=&quot;highlighter-rouge&quot;&gt;acl&lt;/code&gt; parameter. Let’s explain it:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;A “common” query, could be &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read&lt;/code&gt;, this returns the above mentioned JSON (on Intro). Now, if we inject some strings, like this: &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read'} test&lt;/code&gt;, the base64 encoded policy acl looks like this:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;... {'acl': 'public-read'}, test ...&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;We can inject things on the policy!!!&lt;/p&gt;
+
+&lt;h3 id=&quot;looking-for-the-buckets&quot;&gt;Looking for the buckets.&lt;/h3&gt;
+&lt;p&gt;Now we know that we can tamper the policy, we know we need to overwrite &lt;code class=&quot;highlighter-rouge&quot;&gt;/userinfo/idiotsctf@idiots.com/info.json&lt;/code&gt; file to obtain admin privileges, but we don’t know the S3 bucket name where the user information is being stored.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Patatas in action:&lt;/strong&gt;
+Our team mate @HackingPatatas has an incredible ability to try random things and make it work. He tried &lt;code class=&quot;highlighter-rouge&quot;&gt;cloud-users.s3.amazonaws.com&lt;/code&gt; and it was a valid bucket. So it’s highly probable that the &lt;code class=&quot;highlighter-rouge&quot;&gt;info.json&lt;/code&gt;file is being stored on that bucket.&lt;/p&gt;
+
+&lt;h3 id=&quot;bypassing-policy-restrictions&quot;&gt;Bypassing policy restrictions.&lt;/h3&gt;
+&lt;p&gt;The policy tells us we can’t just query &lt;code class=&quot;highlighter-rouge&quot;&gt;cloud-users&lt;/code&gt; bucket, as the buckets and the keys of the buckets we are allowed to query, are well defined on the policy. We need to figure out how to invalidate those restrictions and add our own.&lt;/p&gt;
+
+&lt;p&gt;If we try to POST something like this :&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;POST https://cloudb-users.s3.amazonaws.com/
+
+{
+&quot;key&quot;:&quot;users/idiotsctf@idiots.com/info.json&quot;,
+...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The AWS S3 server will fail as the policy only allows &lt;code class=&quot;highlighter-rouge&quot;&gt;cloud-profilepics&lt;/code&gt; as bucket and &lt;code class=&quot;highlighter-rouge&quot;&gt;profilepics/&lt;/code&gt; as bucket key path.&lt;/p&gt;
+
+&lt;p&gt;A way to bypass, at least the &lt;code class=&quot;highlighter-rouge&quot;&gt;bucket&lt;/code&gt; restriction is adding another &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; JSON block. In JSON if the same key appears many times on the same level, the last is going to be the valid one. In this case, as the &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; directive appears before the user controlled &lt;code class=&quot;highlighter-rouge&quot;&gt;acl&lt;/code&gt; injectable parameter, we can inject something like this to invalidate the previous conditions:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;public-read'}], 
+'conditions': [
+['starts-with', '$key', 'users/'],
+{'bucket':'cloudb-users'},
+{'acl':'public-read
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;See how we are closing the previous &lt;code class=&quot;highlighter-rouge&quot;&gt;condition&lt;/code&gt; with &lt;code class=&quot;highlighter-rouge&quot;&gt;]&lt;/code&gt;, and opening a new one, with the &lt;code class=&quot;highlighter-rouge&quot;&gt;cloud-users&lt;/code&gt; as allowed bucket. This returned the error &lt;code class=&quot;highlighter-rouge&quot;&gt;Invalid according to Policy: Policy Condition failed: [&quot;starts-with&quot;, &quot;$key&quot;, &quot;profilepics/&quot;]&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Hmmm, our &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with&lt;/code&gt; directive is being overwritted by the original one, which is after our injection point.&lt;/p&gt;
+
+&lt;h3 id=&quot;the-magic-of-the-patata-again&quot;&gt;The magic of the patata… again.&lt;/h3&gt;
+&lt;p&gt;We need to find a way to invalidate the second &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with: profilepics/&lt;/code&gt; directive, we can do this by creating a new JSON block at the end of our injection, like this:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;(our injection) ... ], 'new-block': [{'acl': 'public-read&lt;/code&gt;, so the second &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with&lt;/code&gt; is not going to be inside the &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; block anymore. BUUUUUUT, we just can’t declare blocks with  names other than &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;expiration&lt;/code&gt; or we get an error like this &lt;code class=&quot;highlighter-rouge&quot;&gt;Invalid Policy: Unexpected: 'new-block'&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;This is terrible, we can only use two directives, the first one, &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt;, will overwrite our injected condition again, so we do not win anything, and the second, &lt;code class=&quot;highlighter-rouge&quot;&gt;expiration&lt;/code&gt;, only supports a single string as value.&lt;/p&gt;
+
+&lt;p&gt;After a bit of try, error, try, error, our team mate @HackingPatatas, made it again. He wrotes on team’s chat:&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;DarkPatatas, [6 abr 2019 15:29:10]:
+ostia.. un sec (the hell... wait a second...)
+
+JAJASDJASJASODJASOJDAOSJDAOSJdas (laughts in spanish)
+
+ME MATO (I'll kill myself)
+
+lo tengo (I got it)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;What? How?&lt;/p&gt;
+
+&lt;p&gt;He just fucking tested &lt;code class=&quot;highlighter-rouge&quot;&gt;Conditions&lt;/code&gt; instead of &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt;, and Amazon take it as a valid Policy key, but not applying it as a condition for the policy, so we successfully bypassed al the restrictions.&lt;/p&gt;
+
+&lt;p&gt;The next step is do the same but this time, uploading an &lt;code class=&quot;highlighter-rouge&quot;&gt;info.json&lt;/code&gt; to /users/idiotsctf@idiots.com/info.json, with the “admin” flag set to &lt;code class=&quot;highlighter-rouge&quot;&gt;true&lt;/code&gt;. And…&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_final.png&quot; alt=&quot;cloud1&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Ding ding ding!!! We are admin!!! And, of course, now we can go to &lt;code class=&quot;highlighter-rouge&quot;&gt;/admin&lt;/code&gt; endpoint, authenticate and read the flag.&lt;/p&gt;
+
+&lt;h3 id=&quot;final-thoughts&quot;&gt;Final thoughts&lt;/h3&gt;
+
+&lt;p&gt;What the hell Amazon?&lt;/p&gt;
+
+&lt;p&gt;Thanks to all the team, specially @phiber_int3 and @HackingPatatas to help a lot on solving this challenge. It was really funny and challenging!&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="web" />
+      
+        <category term="ctf" />
+      
+        <category term="aws" />
+      
+
+      
+
+      
+        <summary type="html">This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+  
+    <entry>
+      
+      <title type="html">[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)</title>
+      
+      
+      <link href="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)" />
+      
+      <published>2019-04-20T12:00:00+01:00</published>
+      <updated>2019-04-20T12:00:00+01:00</updated>
+      <id>http://localhost:4000/2019/04/20/midnightsunctf-bigspin</id>
+      <content type="html" xml:base="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
+
+&lt;p&gt;The Bigspin challenge, from web cathegory, has the following statement:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;This app got hacked due to admin and uberadmin directories being open. Was just about to wget -r it, but then they fixed it :( Can you help me get the files again?
+
+Service: http://bigspin-01.play.midnightsunctf.se:3123
+
+Author: avlidienbrunn
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
+&lt;p&gt;First is first, let’s see what this application looks like on it’s root path:&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;html&amp;gt;&lt;/span&gt;
+    What's it gonna be? Are you an 
+    &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/uberadmin/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;uberadmin&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
+    an &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/admin/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;admin&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
+    a &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/user/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;user&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
+    or (most likely) just a &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/pleb/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;pleb&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;?
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/html&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;Ok so we have four kind of “privilege” levels, and probably we need to reach /uberadmin/ path, cool but, How? Trying to just navigate http://bigspin-01.play.midnightsunctf.se:3123/uberadmin/ shows us an Nginx 403 default error, the same occurs with /user, otherwise, /admin shows a 404. How about /pleb?.&lt;/p&gt;
+
+&lt;p&gt;/pleb path returns a 200 OK with the HTML body of http://www.example.com/.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_1.png&quot; alt=&quot;pleb1&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Usually, when I face Nginx servers on CTFs and in some real-world cases, I instantly think about Nginx-alias path traversal vulenerabilities, so I tested /pleb../ and.. the server returns 502 Bad Gateway error.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_2.png&quot; alt=&quot;pleb2&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Wait, what? If not vulnerable, it should return 404, if vulnerable it should return 404 or 200, as we are asking for an existing file or path.&lt;/p&gt;
+
+&lt;h3 id=&quot;13-beating-user-level&quot;&gt;1/3 beating user level.&lt;/h3&gt;
+&lt;p&gt;Now we have an unexpected behaviour, when the /pleb/ string is present on the path, the server returns the HTML body of example.com, this could be an indicative of &lt;code class=&quot;highlighter-rouge&quot;&gt;proxy_pass&lt;/code&gt; Nginx directive acting as a reverse proxy to www.example.com, but if we add any characters to the end of /pleb, like /plebidiot, the server returns 502, this means that the server is trying to reach www.example.comidiot, as it can’t reach that domain, it returns 502.&lt;/p&gt;
+
+&lt;p&gt;Well, so now we know that some kind of SSRF can be done here, my man @dj.thd told us, what if you use a dynamically resolver dns server based on level1 subdomain, and ignoring  other low-level subdomains? Like this www.example.com.127.0.0.1.idiots.com -&amp;gt; 127.0.0.1. Great idea, fortunately for us, there’s a service that does exactly this, nip.io.&lt;/p&gt;
+
+&lt;p&gt;So, let’s see what happens, when we try to reach /pleb.127.0.0.1.nip.io/user/,&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_3.png&quot; alt=&quot;pleb3&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Ding ding ding!!! Win!!! We reached /users/ folder, with shows us an Index folder where we can see an “nginx.cönf “ file. To read it, my man @patatasfritas used double URL encoding, as Nginx is not that friendly when trying to read files with special characters.&lt;/p&gt;
+
+&lt;p&gt;The nginx.conf file contained the following directives:&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; # omited for readability
+
+http {
+
+    # omited for readability
+
+    server {
+        listen 80;
+
+        location / {
+            root /var/www/html/public;
+            try_files $uri $uri/index.html $uri/ =404;
+        }
+
+        location /user {
+            allow 127.0.0.1;
+            deny all;
+            autoindex on;
+            root /var/www/html/;
+        }
+
+        location /admin {
+            internal;
+            autoindex on;
+            alias /var/www/html/admin/;
+        }
+
+        location /uberadmin {
+            allow 0.13.3.7;
+            deny all;
+            autoindex on;
+            alias /var/www/html/uberadmin/;
+        }
+
+        location ~ /pleb([/a-zA-Z0-9.:%]+) {
+            proxy_pass   http://example.com$1;
+        }
+
+        access_log /dev/stdout;
+        error_log /dev/stdout;
+    }
+
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Well, see that? /user path can only be reached on localhost, we aimed that using the location /pleb SSRF, pointing a user controlled domain to 127.0.0.1 using nip.io, a classic SSRF tip.&lt;/p&gt;
+
+&lt;h3 id=&quot;23-beating-admin-level&quot;&gt;2/3 beating admin level.&lt;/h3&gt;
+&lt;p&gt;Now we need to reach &lt;code class=&quot;highlighter-rouge&quot;&gt;/admin&lt;/code&gt;, it’s configuration is the same, but this time it has an &lt;code class=&quot;highlighter-rouge&quot;&gt;internal&lt;/code&gt; nginx directive, what means internal? Let’s Google a bit:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Specifies that a given location can only be used for internal requests. 
+For external requests, the client error 404 (Not Found) is returned. Internal requests are the following:
+
+-   requests redirected by the error_page, index, random_index, and try_files directives;
+-   requests redirected by the “X-Accel-Redirect” response header field from an upstream server;
+-   subrequests formed by the include virtual command of the  ngx_http_ssi_module  module, by the ngx_http_addition_module module directives,
+and by auth_request and  mirror directives; requests changed by the rewrite directive.
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Ok, while reading this snippet of documentation, the &lt;code class=&quot;highlighter-rouge&quot;&gt;X-Accel-Redirect&lt;/code&gt; header shines among so many directives. What if we try to do the same as the previous step, but this time resolving to a user controlled server, which always redirects with &lt;code class=&quot;highlighter-rouge&quot;&gt;X-Accel-Redirect&lt;/code&gt;pointing to &lt;code class=&quot;highlighter-rouge&quot;&gt;/admin&lt;/code&gt;? We can use nip.io again to do this.&lt;/p&gt;
+
+&lt;p&gt;First, we need to setup a simple python web server and configure it to always redirect, simple. Then, we try to reach /pleb.X.X.X.X.nip.io, if everything works, the admin folder should be returned and…&lt;/p&gt;
+
+&lt;p&gt;Ding ding ding!!! Win!!! Another win, now we can reach /admin location.&lt;/p&gt;
+
+&lt;h3 id=&quot;33-beating-uberadmin-level&quot;&gt;3/3 beating uberadmin level.&lt;/h3&gt;
+&lt;p&gt;This level was easy peasy, as when seeing the Nginx configuration file, it highlights the alias traversal on /admin location, so we just need to configure our python server with &lt;code class=&quot;highlighter-rouge&quot;&gt;X-Accel-Redirect: /admin..uberadmin/flag.txt&lt;/code&gt; and…&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/bigspin/bigspin_4.png&quot; alt=&quot;pleb4&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Win!!! We got the flag.&lt;/p&gt;
+
+&lt;h3 id=&quot;final-thoughts&quot;&gt;Final thoughts&lt;/h3&gt;
+&lt;p&gt;This challenge was really funny, it’s curious how sensitive an Nginx configuration file is. Thanks to @HackingPatatas and @dj.thd for solving this challenge with me.&lt;/p&gt;
+
+&lt;p&gt;Feel free to ping me if you see any mistake at @_dreadlocked on twitter.&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="web" />
+      
+        <category term="ctf" />
+      
+        <category term="nginx" />
+      
+
+      
+
+      
+        <summary type="html">This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+  
+    <entry>
+      
       <title type="html">[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)</title>
       
       
-      <link href="/2018/10/08/secadmin-reversing-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)" />
+      <link href="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)" />
       
       <published>2018-10-08T13:02:44+01:00</published>
       <updated>2018-10-08T13:02:44+01:00</updated>
-      <id>/2018/10/08/secadmin-reversing-writeup</id>
-      <content type="html" xml:base="/2018/10/08/secadmin-reversing-writeup/">&lt;p&gt;Last week, &lt;a href=&quot;https://www.secadmin.es/&quot;&gt;Secadmin&lt;/a&gt; conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.&lt;/p&gt;
+      <id>http://localhost:4000/2018/10/08/secadmin-reversing-writeup</id>
+      <content type="html" xml:base="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/">&lt;p&gt;Last week, &lt;a href=&quot;https://www.secadmin.es/&quot;&gt;Secadmin&lt;/a&gt; conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.&lt;/p&gt;
 
 &lt;p&gt;The challenge has a long statement, in summary, they let you a binary and you need to reverse it to obtain the flag. Go go go go!&lt;/p&gt;
 
@@ -352,12 +703,12 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       <title type="html">Brief introduction on reverse engineering Crystal binaries.</title>
       
       
-      <link href="/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
+      <link href="http://localhost:4000/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
       
       <published>2018-10-08T13:02:44+01:00</published>
       <updated>2018-10-08T13:02:44+01:00</updated>
-      <id>/2018/10/08/reversing-crystal-binaries</id>
-      <content type="html" xml:base="/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
+      <id>http://localhost:4000/2018/10/08/reversing-crystal-binaries</id>
+      <content type="html" xml:base="http://localhost:4000/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
 
 &lt;p&gt;You can learn more about Crystal here: &lt;a href=&quot;https://crystal-lang.org/&quot;&gt;crystal&lt;/a&gt;&lt;/p&gt;
 
@@ -492,12 +843,12 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       <title type="html">[CTF Write-up] nn8ed HackGym challenge write-up.</title>
       
       
-      <link href="/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
+      <link href="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
       
       <published>2018-10-08T13:01:44+01:00</published>
       <updated>2018-10-08T13:01:44+01:00</updated>
-      <id>/2018/10/08/nn8ed-hackgym-writeup</id>
-      <content type="html" xml:base="/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
+      <id>http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup</id>
+      <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
 
 &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Say the magic word to get the flag!
 
@@ -601,12 +952,12 @@ X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
       <title type="html">[CTF Write-up] nn8ed Tindermon challenge write-up.</title>
       
       
-      <link href="/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
+      <link href="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
       
       <published>2018-10-08T13:00:44+01:00</published>
       <updated>2018-10-08T13:00:44+01:00</updated>
-      <id>/2018/10/08/nn8ed-tindermon-writeup</id>
-      <content type="html" xml:base="/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
+      <id>http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup</id>
+      <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
 
 &lt;p&gt;Get the admin password! There is a WAF and it is NodeJS… Easy peasy!
 &lt;a href=&quot;http://tindermon.ka0labs.org/&quot;&gt;http://tindermon.ka0labs.org&lt;/a&gt;&lt;/p&gt;

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)</title>
+  <meta name="description" content="This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="http://localhost:4000/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)">
+  <meta name="twitter:description" content="This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)</h1>
+    
+    <p class="post-meta"><time datetime="2019-04-20T13:00:00+01:00" itemprop="datePublished">Apr 20, 2019</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/aws/">aws</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.</p>
+
+<p>The Cloudb challenge, from web cathegory, has the following statement:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>These guys made a DB in the cloud. Hope it's not a rain cloud...
+
+Service:  [http://cloudb-01.play.midnightsunctf.se](http://cloudb-01.play.midnightsunctf.se/)
+
+Author: avlidienbrunn
+</code></pre></div></div>
+
+<h3 id="intro">Intro</h3>
+<p>Another cloud challenge, I love them! This challenge is about reaching <code class="highlighter-rouge">admin</code> privileges on a Cloud data storage platform.</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_1.png" alt="cloud1" /></p>
+
+<p>The platform lets you upload a profile pic by directly posting it to an Amazon AWS S3 bucket. The upload process consists on two different requests:</p>
+
+<ul>
+  <li>A GET to <code class="highlighter-rouge">/signature</code> path, passing an ACL and a HMAC sign as parameters. This request returns a base64 encoded JSON, with an AWS S3 bucket POST policy:</li>
+</ul>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_3.png" alt="cloud1" /></p>
+
+<p>The decoded base64:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="s2">"expiration"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2019-04-06T14:17:03.000Z"</span><span class="p">,</span><span class="w">
+  </span><span class="s2">"conditions"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+      </span><span class="p">[</span><span class="s2">"content-length-range"</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">10000</span><span class="p">],</span><span class="w"> </span><span class="p">{</span><span class="s2">"bucket"</span><span class="p">:</span><span class="w"> </span><span class="s2">"cloudb-profilepics"</span><span class="p">},</span><span class="w">
+      </span><span class="p">{</span><span class="s2">"acl"</span><span class="p">:</span><span class="w"> </span><span class="s2">"public-read"</span><span class="p">},</span><span class="w">
+      </span><span class="p">[</span><span class="s2">"starts-with"</span><span class="p">,</span><span class="w"> </span><span class="s2">"$key"</span><span class="p">,</span><span class="w"> </span><span class="s2">"profilepics/"</span><span class="p">]</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<ul>
+  <li>A POST request to the Amazon AWS S3 bucket using the amazon standard for this kind of requests, explained here: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html</li>
+</ul>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_4.png" alt="cloud1" /></p>
+
+<p>Seems like first we are creating a policy, then using this policy to POST our profile pic to the S3 bucket.</p>
+
+<p>Our profile pic is saved at <code class="highlighter-rouge">/profilepics/idiotsctf@idiots.con/ejemplo.jpeg</code>.</p>
+
+<p>Also, the application lets us request our profile information, at <code class="highlighter-rouge">/userinfo/idiotsctf@idiots.com/info.json</code> endpoint, returning the following JSON:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="s2">"admin"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> 
+  </span><span class="s2">"profilepic"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/profilepics/idiotsctf@idiots.com/ejemplo.jpeg"</span><span class="p">,</span><span class="w"> 
+  </span><span class="s2">"hmac"</span><span class="p">:</span><span class="w"> </span><span class="s2">"427881d9d33e2e619047bbaff90205a6c804524405d3574c8f4dfcabee162788"</span><span class="p">,</span><span class="w"> 
+  </span><span class="s2">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"idiotsctf"</span><span class="p">,</span><span class="w"> 
+  </span><span class="s2">"email"</span><span class="p">:</span><span class="w"> </span><span class="s2">"idiotsctf@idiots.com"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Hmm… that “admin” flag set to <code class="highlighter-rouge">false</code>, seems like we will need to overwrite our <code class="highlighter-rouge">/userinfo/idiotsctf@idiots.com/info.json</code> profile file and set the admin flag to true.</p>
+
+<h3 id="understanding-a-bit-how-aws-s3-post-policy-works">Understanding a bit how AWS S3 POST Policy works.</h3>
+<p>Before continuing, it’s necesary to understand a bit how AWS S3 policy works. Amazon let developers upload content via POST requests to a S3 bucket. To do this, the developer needs to define a policy parameter for each user upload, this is what the <code class="highlighter-rouge">GET /signature</code> request does.</p>
+
+<p>That policy controls how much time the client-side has to upload the content, where it’s going to be uploaded, the content type, which bucket is allowed etc.</p>
+
+<p>The above JSON policy (on Intro), tells:</p>
+<ul>
+  <li>Your POST upload permission ends at <code class="highlighter-rouge">2019-04-06T14:17:03.000Z</code></li>
+  <li>You can upload files between 1 and 10000 bytes length.</li>
+  <li>You are allowed to upload it to cloudb-profilepics bucket.</li>
+  <li>Your ACL will be public-read, so everyone can read the content you upload.</li>
+  <li>And the S3 bucket key where you upload the content, must start with <code class="highlighter-rouge">profilepics/</code></li>
+</ul>
+
+<h3 id="the-magic-of-team-work">The magic of team work.</h3>
+<p>Phiber, from int3pids is one of our ID10Ts team colleague, he was the first who started working on this challenge. When I woke up, he had some work done over the challenge as he realized <strong>how to inject characters on the S3 policy</strong> generated by the <code class="highlighter-rouge">/signature</code> controller.</p>
+
+<ul>
+  <li>First he found the secret key which where used to create the sign on the <code class="highlighter-rouge">hmac</code> parameter. That signed the <code class="highlighter-rouge">acl</code> parameter. The key was <code class="highlighter-rouge">[object Object]</code>, literally.</li>
+  <li>Second, he was able to inject JSON strings on the <code class="highlighter-rouge">acl</code> parameter. Let’s explain it:</li>
+</ul>
+
+<p>A “common” query, could be <code class="highlighter-rouge">/signature?hmac=&lt;hmac&gt;&amp;acl=public-read</code>, this returns the above mentioned JSON (on Intro). Now, if we inject some strings, like this: <code class="highlighter-rouge">/signature?hmac=&lt;hmac&gt;&amp;acl=public-read'} test</code>, the base64 encoded policy acl looks like this:</p>
+
+<p><code class="highlighter-rouge">... {'acl': 'public-read'}, test ...</code></p>
+
+<p>We can inject things on the policy!!!</p>
+
+<h3 id="looking-for-the-buckets">Looking for the buckets.</h3>
+<p>Now we know that we can tamper the policy, we know we need to overwrite <code class="highlighter-rouge">/userinfo/idiotsctf@idiots.com/info.json</code> file to obtain admin privileges, but we don’t know the S3 bucket name where the user information is being stored.</p>
+
+<p><strong>Patatas in action:</strong>
+Our team mate @HackingPatatas has an incredible ability to try random things and make it work. He tried <code class="highlighter-rouge">cloud-users.s3.amazonaws.com</code> and it was a valid bucket. So it’s highly probable that the <code class="highlighter-rouge">info.json</code>file is being stored on that bucket.</p>
+
+<h3 id="bypassing-policy-restrictions">Bypassing policy restrictions.</h3>
+<p>The policy tells us we can’t just query <code class="highlighter-rouge">cloud-users</code> bucket, as the buckets and the keys of the buckets we are allowed to query, are well defined on the policy. We need to figure out how to invalidate those restrictions and add our own.</p>
+
+<p>If we try to POST something like this :</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>POST https://cloudb-users.s3.amazonaws.com/
+
+{
+"key":"users/idiotsctf@idiots.com/info.json",
+...
+}
+</code></pre></div></div>
+
+<p>The AWS S3 server will fail as the policy only allows <code class="highlighter-rouge">cloud-profilepics</code> as bucket and <code class="highlighter-rouge">profilepics/</code> as bucket key path.</p>
+
+<p>A way to bypass, at least the <code class="highlighter-rouge">bucket</code> restriction is adding another <code class="highlighter-rouge">conditions</code> JSON block. In JSON if the same key appears many times on the same level, the last is going to be the valid one. In this case, as the <code class="highlighter-rouge">conditions</code> directive appears before the user controlled <code class="highlighter-rouge">acl</code> injectable parameter, we can inject something like this to invalidate the previous conditions:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>public-read'}], 
+'conditions': [
+['starts-with', '$key', 'users/'],
+{'bucket':'cloudb-users'},
+{'acl':'public-read
+</code></pre></div></div>
+
+<p>See how we are closing the previous <code class="highlighter-rouge">condition</code> with <code class="highlighter-rouge">]</code>, and opening a new one, with the <code class="highlighter-rouge">cloud-users</code> as allowed bucket. This returned the error <code class="highlighter-rouge">Invalid according to Policy: Policy Condition failed: ["starts-with", "$key", "profilepics/"]</code></p>
+
+<p>Hmmm, our <code class="highlighter-rouge">starts-with</code> directive is being overwritted by the original one, which is after our injection point.</p>
+
+<h3 id="the-magic-of-the-patata-again">The magic of the patata… again.</h3>
+<p>We need to find a way to invalidate the second <code class="highlighter-rouge">starts-with: profilepics/</code> directive, we can do this by creating a new JSON block at the end of our injection, like this:</p>
+
+<p><code class="highlighter-rouge">(our injection) ... ], 'new-block': [{'acl': 'public-read</code>, so the second <code class="highlighter-rouge">starts-with</code> is not going to be inside the <code class="highlighter-rouge">conditions</code> block anymore. BUUUUUUT, we just can’t declare blocks with  names other than <code class="highlighter-rouge">conditions</code> or <code class="highlighter-rouge">expiration</code> or we get an error like this <code class="highlighter-rouge">Invalid Policy: Unexpected: 'new-block'</code>.</p>
+
+<p>This is terrible, we can only use two directives, the first one, <code class="highlighter-rouge">conditions</code>, will overwrite our injected condition again, so we do not win anything, and the second, <code class="highlighter-rouge">expiration</code>, only supports a single string as value.</p>
+
+<p>After a bit of try, error, try, error, our team mate @HackingPatatas, made it again. He wrotes on team’s chat:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>DarkPatatas, [6 abr 2019 15:29:10]:
+ostia.. un sec (the hell... wait a second...)
+
+JAJASDJASJASODJASOJDAOSJDAOSJdas (laughts in spanish)
+
+ME MATO (I'll kill myself)
+
+lo tengo (I got it)
+</code></pre></div></div>
+
+<p>What? How?</p>
+
+<p>He just fucking tested <code class="highlighter-rouge">Conditions</code> instead of <code class="highlighter-rouge">conditions</code>, and Amazon take it as a valid Policy key, but not applying it as a condition for the policy, so we successfully bypassed al the restrictions.</p>
+
+<p>The next step is do the same but this time, uploading an <code class="highlighter-rouge">info.json</code> to /users/idiotsctf@idiots.com/info.json, with the “admin” flag set to <code class="highlighter-rouge">true</code>. And…</p>
+
+<p><img src="https://raw.githubusercontent.com/dreadlocked/ctf-writeups/master/images/cloudb/cloudb_final.png" alt="cloud1" /></p>
+
+<p>Ding ding ding!!! We are admin!!! And, of course, now we can go to <code class="highlighter-rouge">/admin</code> endpoint, authenticate and read the flag.</p>
+
+<h3 id="final-thoughts">Final thoughts</h3>
+
+<p>What the hell Amazon?</p>
+
+<p>Thanks to all the team, specially @phiber_int3 and @HackingPatatas to help a lot on solving this challenge. It was really funny and challenging!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="http://localhost:4000/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
