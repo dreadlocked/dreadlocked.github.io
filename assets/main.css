@@ -433,10 +433,6 @@ p, blockquote, pre,
 ul, ol, dl, figure,
 .highlight {
   margin-bottom: 15px; }
- 
-p {
-  text-align: justify
-} 
 
 /**
  * Images

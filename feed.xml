@@ -3,10 +3,10 @@
   <generator uri="http://jekyllrb.com" version="3.8.4">Jekyll</generator>
   
   
-  <link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" />
-  <link href="http://localhost:4000/" rel="alternate" type="text/html" />
-  <updated>2019-06-16T19:00:17+02:00</updated>
-  <id>http://localhost:4000//</id>
+  <link href="/feed.xml" rel="self" type="application/atom+xml" />
+  <link href="/" rel="alternate" type="text/html" />
+  <updated>2019-06-16T19:06:59+02:00</updated>
+  <id>//</id>
 
   
     <title type="html">Hans Topo Blog</title>
@@ -25,12 +25,12 @@
       <title type="html">[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)</title>
       
       
-      <link href="http://localhost:4000/2019/06/15/midnightsunctf-marcololo/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)" />
+      <link href="/2019/06/15/midnightsunctf-marcololo/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Finals Marcololo (web. mid)" />
       
       <published>2019-06-15T13:00:00+02:00</published>
       <updated>2019-06-15T13:00:00+02:00</updated>
-      <id>http://localhost:4000/2019/06/15/midnightsunctf-marcololo</id>
-      <content type="html" xml:base="http://localhost:4000/2019/06/15/midnightsunctf-marcololo/">&lt;p&gt;This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.&lt;/p&gt;
+      <id>/2019/06/15/midnightsunctf-marcololo</id>
+      <content type="html" xml:base="/2019/06/15/midnightsunctf-marcololo/">&lt;p&gt;This weekend, Midnightsun CTF Finals took place, a really funny CTF in Stockholm, a lovely place to visit.&lt;/p&gt;
 
 &lt;p&gt;Marcololo task had the following statement:&lt;/p&gt;
 
@@ -41,9 +41,9 @@ Author: avlidienbrunn
 
 &lt;p&gt;When accesing the challenge website, the following form was shown:&lt;/p&gt;
 
-&lt;p&gt;[image1]&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/midnightsunctf/image1.png?raw=true&quot; alt=&quot;initial_form&quot; /&gt;&lt;/p&gt;
 
-&lt;p&gt;So it seems we need to submit a URL that triggers an alert(1) using XSS to to this form. Also, it indicates us where the actual challenge is, at &lt;code class=&quot;highlighter-rouge&quot;&gt;http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=marcololo&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;So it seems we need to submit a URL that triggers an alert(1) using XSS to to this form. Also, it indicates us where the actual challenge is, at ```http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=marcololo``&lt;/p&gt;
 
 &lt;p&gt;This webpage returned the following HTTP response:&lt;/p&gt;
 
@@ -149,12 +149,12 @@ alert(1)
       <title type="html">[CTF Write-up] Midnightsun CTF Quals- Cloudb (web. hard)</title>
       
       
-      <link href="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Cloudb (web. hard)" />
+      <link href="/2019/04/20/midnisghtsunctf-cloudb/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Cloudb (web. hard)" />
       
       <published>2019-04-20T14:00:00+02:00</published>
       <updated>2019-04-20T14:00:00+02:00</updated>
-      <id>http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb</id>
-      <content type="html" xml:base="http://localhost:4000/2019/04/20/midnisghtsunctf-cloudb/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
+      <id>/2019/04/20/midnisghtsunctf-cloudb</id>
+      <content type="html" xml:base="/2019/04/20/midnisghtsunctf-cloudb/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
 
 &lt;p&gt;The Cloudb challenge, from web cathegory, has the following statement:&lt;/p&gt;
 
@@ -340,12 +340,12 @@ lo tengo (I got it)
       <title type="html">[CTF Write-up] Midnightsun CTF Quals- Bigspin (web. mid)</title>
       
       
-      <link href="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Bigspin (web. mid)" />
+      <link href="/2019/04/20/midnightsunctf-bigspin/" rel="alternate" type="text/html" title="[CTF Write-up] Midnightsun CTF Quals- Bigspin (web. mid)" />
       
       <published>2019-04-20T13:00:00+02:00</published>
       <updated>2019-04-20T13:00:00+02:00</updated>
-      <id>http://localhost:4000/2019/04/20/midnightsunctf-bigspin</id>
-      <content type="html" xml:base="http://localhost:4000/2019/04/20/midnightsunctf-bigspin/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
+      <id>/2019/04/20/midnightsunctf-bigspin</id>
+      <content type="html" xml:base="/2019/04/20/midnightsunctf-bigspin/">&lt;p&gt;This weekend, my mates of ID-10-T Team and I decided to play the Midnightsun CTF, we had a long time without playing CTFs so it was nice to meet again and solve some challenges.&lt;/p&gt;
 
 &lt;p&gt;The Bigspin challenge, from web cathegory, has the following statement:&lt;/p&gt;
 
@@ -500,12 +500,12 @@ and by auth_request and  mirror directives; requests changed by the rewrite dire
       <title type="html">[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)</title>
       
       
-      <link href="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)" />
+      <link href="/2018/10/08/secadmin-reversing-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] Secadmin El Ninja contrareloj (rev. easy)" />
       
       <published>2018-10-08T14:02:44+02:00</published>
       <updated>2018-10-08T14:02:44+02:00</updated>
-      <id>http://localhost:4000/2018/10/08/secadmin-reversing-writeup</id>
-      <content type="html" xml:base="http://localhost:4000/2018/10/08/secadmin-reversing-writeup/">&lt;p&gt;Last week, &lt;a href=&quot;https://www.secadmin.es/&quot;&gt;Secadmin&lt;/a&gt; conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.&lt;/p&gt;
+      <id>/2018/10/08/secadmin-reversing-writeup</id>
+      <content type="html" xml:base="/2018/10/08/secadmin-reversing-writeup/">&lt;p&gt;Last week, &lt;a href=&quot;https://www.secadmin.es/&quot;&gt;Secadmin&lt;/a&gt; conference was held with some easy CTF challenges about crypto, web and reversing. This write-ups is for “El Ninja Contrareloj” challenge, a reversing one.&lt;/p&gt;
 
 &lt;p&gt;The challenge has a long statement, in summary, they let you a binary and you need to reverse it to obtain the flag. Go go go go!&lt;/p&gt;
 
@@ -827,12 +827,12 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       <title type="html">Brief introduction on reverse engineering Crystal binaries.</title>
       
       
-      <link href="http://localhost:4000/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
+      <link href="/2018/10/08/reversing-crystal-binaries/" rel="alternate" type="text/html" title="Brief introduction on reverse engineering Crystal binaries." />
       
       <published>2018-10-08T14:02:44+02:00</published>
       <updated>2018-10-08T14:02:44+02:00</updated>
-      <id>http://localhost:4000/2018/10/08/reversing-crystal-binaries</id>
-      <content type="html" xml:base="http://localhost:4000/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
+      <id>/2018/10/08/reversing-crystal-binaries</id>
+      <content type="html" xml:base="/2018/10/08/reversing-crystal-binaries/">&lt;p&gt;Crystal is a “new” Ruby-syntax-based programming language, born in 2014. The main diference is, that this is not a Ruby implementation, this is another compiled programming language, but its syntax is based in ruby, so Crystal != Ruby.&lt;/p&gt;
 
 &lt;p&gt;You can learn more about Crystal here: &lt;a href=&quot;https://crystal-lang.org/&quot;&gt;crystal&lt;/a&gt;&lt;/p&gt;
 
@@ -967,12 +967,12 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
       <title type="html">[CTF Write-up] nn8ed HackGym challenge write-up.</title>
       
       
-      <link href="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
+      <link href="/2018/10/08/nn8ed-hackgym-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed HackGym challenge write-up." />
       
       <published>2018-10-08T14:01:44+02:00</published>
       <updated>2018-10-08T14:01:44+02:00</updated>
-      <id>http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup</id>
-      <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
+      <id>/2018/10/08/nn8ed-hackgym-writeup</id>
+      <content type="html" xml:base="/2018/10/08/nn8ed-hackgym-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This pwn challenge has the following statement:&lt;/p&gt;
 
 &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Say the magic word to get the flag!
 
@@ -1076,12 +1076,12 @@ X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
       <title type="html">[CTF Write-up] nn8ed Tindermon challenge write-up.</title>
       
       
-      <link href="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
+      <link href="/2018/10/08/nn8ed-tindermon-writeup/" rel="alternate" type="text/html" title="[CTF Write-up] nn8ed Tindermon challenge write-up." />
       
       <published>2018-10-08T14:00:44+02:00</published>
       <updated>2018-10-08T14:00:44+02:00</updated>
-      <id>http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup</id>
-      <content type="html" xml:base="http://localhost:4000/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
+      <id>/2018/10/08/nn8ed-tindermon-writeup</id>
+      <content type="html" xml:base="/2018/10/08/nn8ed-tindermon-writeup/">&lt;p&gt;This weekend, Navaja Negra 8 CTF started, organized by &lt;a href=&quot;https://www.twitter.com/ka0labs_&quot;&gt;ka0labs.org&lt;/a&gt;. This web challenge has the following statement:&lt;/p&gt;
 
 &lt;p&gt;Get the admin password! There is a WAF and it is NodeJS… Easy peasy!
 &lt;a href=&quot;http://tindermon.ka0labs.org/&quot;&gt;http://tindermon.ka0labs.org&lt;/a&gt;&lt;/p&gt;
