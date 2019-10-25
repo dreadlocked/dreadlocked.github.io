@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>Analysis and explotation of 2019-10068, a Remote Command Execution in Kentico CMS &lt;= 12.04</title>
+  <meta name="description" content="During a Red Team assesment, it’s important to be able to investigate and successfully exploit public but undisclosed bugs. In this case, I’m going to explain the methodology for analyzing and exploit an undisclosed bug on Kentico CMS, a .NET based enterprise CMS, let’s go!">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2019/10/25/kentico-cms-rce/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="Analysis and explotation of 2019-10068, a Remote Command Execution ...">
+  <meta name="twitter:description" content="During a Red Team assesment, it’s important to be able to investigate and successfully exploit public but undisclosed bugs. In this case, I’m going to explain the methodology for analyzing and expl...">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">Analysis and explotation of 2019-10068, a Remote Command Execution in Kentico CMS &lt;= 12.04</h1>
+    
+    <p class="post-meta"><time datetime="2019-10-25T12:00:00+01:00" itemprop="datePublished">Oct 25, 2019</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/net/">.net</a>,
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/unserialize/">unserialize</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>During a Red Team assesment, it’s important to be able to investigate and successfully exploit public but undisclosed bugs. In this case, I’m going to explain the methodology for analyzing and exploit an undisclosed bug on Kentico CMS, a .NET based enterprise CMS, let’s go!</p>
+
+<p>Firts of all, let’s read the CVE description about the bug:</p>
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>An issue was discovered in Kentico before 12.0.15. Due to a failure to validate 
+security headers, it was possible for a specially crafted request to the staging 
+service to bypass the initial authentication and proceed to deserialize 
+user-controlled .NET object input. This deserialization then led to unauthenticated 
+remote code execution on the server where the Kentico instance was hosted.
+</code></pre></div></div>
+
+<p>Ok so this bug it’s about a .NET unsafe deserialization bug before Kentico 12.0.15. From a black-box perspective it could be really time consuming to find all the unauthenticated endpoints and exploit them, so I will need to download a trial version. I was lucky as there were a Kentico 11 (which is vulnerable too) demo available to download… well, not really, but changing the version number when downloading from Kentico demo website just serves an older version of the CMS, let’s say that this is kind of an easter egg.</p>
+
+<p>I also downloaded two hotfixes, available on Kentico website, this hotfixes are for 12.0.15 (the fixed version) and for 12.0.14 (the unfixed one), so we can apply “diff” over the DLLs and see which code changes between this two patches.</p>
+
+<p>Reading a bit more about the vulnerability, I found it’s caused by an usafe SOAP deserialization:</p>
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code> An XML encoded SOAP message within an element of the actual SOAP body was being 
+ deserialized by a SOAP Action within the staging web service. The staging service 
+ is used by the application to synchronize changes between different environments 
+ or servers. 
+</code></pre></div></div>
+<p>Now I know I’m looking for a SoapFormatter .NET serializer/unserializer, half of the way done thanks to this description.</p>
+
+<p>Software I used for this analysis:</p>
+<ul>
+  <li>JustAssembly for .NET DLLs diffing.</li>
+  <li>JustDecompile for .NET DLLs decompile to C# readable code and functions finding.</li>
+  <li>Kentico CMS hotfixes and Demo version for dynamic analysis and testing.</li>
+</ul>
+
+<p>JustDecompile let’s you open a whole .NET compiled project and look for strings, functions, variables… I opened the DLLs contained inside 12.0.5 patch, they are at Kentico/Hotfix120_15/DLLs/NET461. Open JustDecompile, click on Open… &gt; File(s)…, and select all the DLLs inside the folder.</p>
+
+<p>Then, click on Search… and type SoapFormatter, it will look for SoapFormatter functions in the whole project. I had luck that there where only two uses of this function inside CMS.Synchronization.dll module, so it seems that this module is the vulnerable one.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/1.png?raw=true" alt="soapformatter" /></p>
+
+<p>This function is used inside StagingTaskData class, inside a wrapper Deserialize private method of this class.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/2.png?raw=true" alt="deserialize1205" /></p>
+
+<p>Let’s compare the CMS.Synchorization.dll between 12.0.15 hotfix and 12.0.14 hotfix to look if this Deserialization method on StagingTaskData have any difference. To do that I used JustAssembly, it let you select two DLLs and it will diff it in a visual way and show you which functions changed.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/3.png?raw=true" alt="diff" />
+<img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/4.png?raw=true" alt="diff" /></p>
+
+<p>So it’s clear, this is the function we were looking for, on 12.0.15 (right), they added a middleware class which verifies the StagingTaskData object being received, instead of the raw string deserialization on 12.0.14 (left).</p>
+
+<p>Well, it’s time to find were StagingTaskData objects are instantiated, JustDecompile lets you look for cross-references to classes to see where are they instantiated.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/5.png?raw=true" alt="usages" /></p>
+
+<p>First match is on CMS.Synchronization.WSE3.dll module, on SyncClient and SyncServer classes, let’s open this module and those classes on JustDecompile to see what are they doing.</p>
+
+<p>On SyncSever class, I find the ULR endpoint to reach its methods, so now I know how to reach a method that uses StagingTaskData, seems the right way.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/6.png?raw=true" alt="syncserver" /></p>
+
+<p>Looking a bit deeper on SyncServer class methods, I found the ProcessSynchronizationTaskData method, which receives a SERIALIZED StagingTaskData object string as parameter, and instantiates, here we have our unauthenticated endpoint to deserialize an unsanitized object.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/7.png?raw=true" alt="processsync" /></p>
+
+<p>To test if we can reach this URL by default and also test if my assumtions were true, I’ll use the Kentico CMS 11 demo downloaded before. To reach the endpoint, let’s visit /SyncWebService/SyncServer and… oops! 404. Investigating on Kentico CMS API, I found it uses a baseURL for Staging service at /CMSPages/Staging/, so the final URL for the ASMX method is: /CMSPages/Staging/SyncServer.asmx/ProcessSynchronizationTaskData. This endpoint will receive the derialized object via POST request.</p>
+
+<p>Let’s then generate a sample evil serialized XML SOAP object string using ysoserial.net with the ActivitySurrogateSelector as gadget and SoapFormatter as payload format.</p>
+
+<p>Here’s the PoC video:</p>
+
+<p>[video]</p>
+
+<p>Hope you learned something more about .NET applications analysis, this was my first time analyzing a real-world .NET application from stratch to find a RCE bug, so everything was new for me.</p>
+
+<p>Ping me if you find something wrong at gongarcialeon@gmail.com, bye!</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
