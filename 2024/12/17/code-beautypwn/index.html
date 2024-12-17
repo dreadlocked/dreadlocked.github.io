@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>Code Beautypwn</title>
+  <meta name="description" content="Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2024/12/17/code-beautypwn/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="Code Beautypwn">
+  <meta name="twitter:description" content="Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Bitter:400,400i,700" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">Code Beautypwn</h1>
+    
+    <p class="post-meta"><time datetime="2024-12-17T12:00:00+01:00" itemprop="datePublished">Dec 17, 2024</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/web/">web</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/code/">code</a>,
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/leak/">leak</a>,
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/osint/">osint</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.</p>
+
+<h4 id="intro">Intro</h4>
+
+<p>JSON, XML, YAML and other text formats are very popular among software developers. They are used for everything from handling information between a web client and the server, as a method of storing information in a database, or to save application configuration files.</p>
+
+<p>For example, JSON and XML formats are well-defined, and their readability is relatively good for humans… as long as they include the appropriate line breaks. However, line breaks in a file can negatively impact application performance since they only serve to make it easier for humans to read the file. For software, line breaks are irrelevant in a JSON or XML formatted file, so they are usually removed.</p>
+
+<h4 id="share-this-code-i-mean-format-this-code">Share this code! I mean, format this code!</h4>
+
+<p>What happens when a developer encounters a file without line breaks? This, my friends, is where today’s protagonist comes into play: “Beautifiers” or formatters. Performing an internet search like “format JSON,” “beautify JSON,” “format XML,” or “beautify XML” returns as the top results two well-known pages for many readers:</p>
+
+<ul>
+  <li>https://jsonformatter.org (JSON and XML)</li>
+  <li>https://codebeautify.org (All types of code and text formats)</li>
+</ul>
+
+<p>Both pages work in a very similar way: you paste the unformatted XML or JSON on one side, click “format,” and it shows you a neat version with line breaks and proper indentation. Simple, right?</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/2.png?raw=true" alt="codebeautify" /></p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/3.png?raw=true" alt="xmlformatter" /></p>
+
+<p>What many might not have noticed is that both pages contain a button in their top menu labeled “Recent Links”.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/4.png?raw=true" alt="recentlinks" /></p>
+
+<p>“Recent Links” contains a list of all the links generated from the content pasted by users of both websites. Additionally, it is possible to view a history going back as far as 2015. And wheat is even worse, you can access the content of these generated links.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/6.png?raw=true" alt="recentlinks_contents" /></p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/7.png?raw=true" alt="content" /></p>
+
+<p>It is therefore possible to see what users of these websites have attempted to format, with no authentication required. But as we all know, no one would use an online page like this to format sensitive data, right? Riiight?</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/8.png?raw=true" alt="meme" /></p>
+
+<p>Google is capable of caching and scraping these links and their content, so it is clear they are considered public information.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/9.png?raw=true" alt="google" /></p>
+
+<p>Scraping all the links on both websites in search of sensitive information yields truly surprising results:</p>
+
+<ul>
+  <li>API keys for highly sensitive services.</li>
+  <li>SSH keys for servers on the internet.</li>
+  <li>Usernames and passwords.</li>
+  <li>Bank account information.</li>
+  <li>Other extremely sensitive data.</li>
+</ul>
+
+<p>And countless amounts of sensitive information as a result of the poor practice of pasting code into untrusted websites.</p>
+
+<h4 id="the-large-american-news-company-case">The “Large American news company” case.</h4>
+
+<p>One case that was reported and solved immediately after the discovery a year ago involved one of the biggest American television network. Among the content of one of the aforementioned pages, a connection string to an FTP server could be found, where videos for their main website were stored. This would allow someone to edit, delete, or change the content. For an international news website, this would have a considerably high impact.</p>
+
+<p><img src="https://github.com/dreadlocked/dreadlocked.github.io/blob/master/images/beautypwn/10.png?raw=true" alt="newscompany" /></p>
+
+<p>Again, this was reported and solved immediately.</p>
+
+<h4 id="conclusion">Conclusion</h4>
+
+<p>As a Red Teamer, this kind of websites are a place to look for potential leaks affecting your target. As a developer or user you should never use online services to paste sensitive information of any kind, especially if this information is stored or processed by an untrusted backend with no guarantees. There are local applications, such as Boop on macOS or Visual Studio as a cross-platform option, which include the ability to format any type of code.</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
