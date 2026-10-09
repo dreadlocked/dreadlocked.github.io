@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  
+  
+  <title>Reverse Engineering PCLink .pclx files for the newest G5-G4X formats.</title>
+  <meta name="description" content="Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.">
+  
+
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="canonical" href="/2026/09/09/reversing-pclink-files/">
+  
+  
+  <link rel="alternate" type="application/rss+xml" title="Hans Topo Blog" href="/feed.xml">
+
+  
+
+  
+  <meta property="og:title" content="Reverse Engineering PCLink .pclx files for the newest G5-G4X formats.">
+  <meta property="og:site_name" content="Hans Topo Blog">
+  <meta property="og:url" content="/2026/09/09/reversing-pclink-files/">
+  <meta property="og:description" content="Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.">
+  
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="_dreadlocked">
+  <meta name="twitter:title" content="Reverse Engineering PCLink .pclx files for the newest G5-G4X formats.">
+  <meta name="twitter:description" content="Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.">
+  
+    <meta name="twitter:creator" content="_dreadlocked">
+  
+  
+
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet">
+
+  
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Hans Topo Blog</a>
+
+    <nav class="site-nav">
+      
+        
+        <a class="page-link" href="/about/">About</a>
+      
+        
+        <a class="page-link" href="/archives/">Archives</a>
+      
+        
+        <a class="page-link" href="https://github.com/yous/whiteglass">GitHub</a>
+      
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    
+      <h1 class="post-title" itemprop="name headline">Reverse Engineering PCLink .pclx files for the newest G5-G4X formats.</h1>
+    
+    <p class="post-meta"><time datetime="2026-09-09T13:00:00+02:00" itemprop="datePublished">Sep 9, 2026</time> •
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/reversing/">reversing</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/code/">code</a>,
+      
+    
+      
+    
+      
+    
+      
+    
+  
+    
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        <a href="/categories/hardware/">hardware</a>
+      
+    
+  
+
+
+
+</p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>Disclaimer: The following article is for informational and awareness purposes only. Any notable findings during this investigation have been reported using the appropriate channels.</p>
+
+<h3 id="intro">Intro</h3>
+
+<p>I have a friend that loves cars and enjoys tuning cars</p>
+
+<p>Some time ago, a friend of mine was working on swapping his Honda Civic K20 engine. The engineer used a program to create the maps for all the engine parameters and my friend wanted to know the exact values used to configure its engine.</p>
+
+<p>The engineer used PCLink to configure the ECU but a password was needed to access the data from the .pclx file that contained the paramenters.</p>
+
+<p>This blog post is a full reverse engineer of how .pclx format ecncrypts data and how to decrypt it easily.</p>
+
+<h3 id="what-the-hell-is-a-pclx">what the hell is a .pclx?</h3>
+
+<p>A <code class="highlighter-rouge">.pclx</code> file is a tuning map used by PCLink for Link ECUs from generations like G4X and G5. It stores everything you need to rebuild a calibration: parameters, tables, input/output config, CAN, firmware and hardware metadata, stats, fault codes, and a bunch of other stuff.</p>
+
+<p>Even though the extension screams “fully proprietary binary format”, the actual logical content of a PCLX is just an XML document called <code class="highlighter-rouge">LinkStorage</code>. The thing stopping you from opening it in a text editor is a binary wrapper encrypted with Block TEA, better known as XXTEA.</p>
+
+<p>There are three different things we need to keep straight from the get-go:</p>
+
+<ol>
+  <li><strong>The PCLX container:</strong> encrypts the whole XML with XXTEA and a fixed key baked into PCLink.</li>
+  <li><strong>Password Protection:</strong> stores the user’s password inside the XML and lets PCLink decide whether the map is locked or unlocked.</li>
+  <li><strong>Save as Encrypted:</strong> on top of that, uses a validation value tied to a specific ECU. It’s a separate feature from Password Protection.</li>
+</ol>
+
+<p>Here’s the architecture I ended up with:</p>
+
+<pre><code class="language-mermaid">flowchart LR
+    A[.pclx file] --&gt; B[XXTEA with fixed key]
+    B --&gt; C[12-byte header]
+    C --&gt; D[XML LinkStorage]
+    D --&gt; E[D2294: Master Password G4]
+    D --&gt; F[D2295: User Password G4]
+    E --&gt; G[PCLink access logic]
+    F --&gt; G
+</code></pre>
+
+<p>The goal of this whole thing was to untangle how <code class="highlighter-rouge">.pclx</code> files get encrypted and figure out whether we could actually pull the data out of saved maps.</p>
+
+<p>The binary I looked at was PCLink.exe version 7.8.2, grabbed straight from their main site.</p>
+
+<p>A quick first look at the tool shows it’s written in Delphi, an old friend :)</p>
+
+<h3 id="1-first-look-at-a-pclx">1. First look at a PCLX</h3>
+
+<p>Open a <code class="highlighter-rouge">.pclx</code> file and you’re greeted with random-looking garbage, i.e. the file looks encrypted. This is already covered in articles like https://ecurecovery.com/blog/how-to-remove-password-link-g4-ecu, which explain how to recover the key set by the user, what we’ll call “Password Protection”.</p>
+
+<p>That article mentions that from G4X onwards, <code class="highlighter-rouge">.pclx</code> files are encrypted with XXTEA, so they can’t be modified or read anymore. But here’s the thing: when you open one of the sample files that ships with PCLink itself, it’s also encrypted. So does that mean the encryption key is static and lives inside the executable? Or in one of its libraries?</p>
+
+<p>To decrypt something you need a key, and that key has to be <em>somewhere</em>, right?</p>
+
+<p>Let’s go find it.</p>
+
+<h3 id="2-tracking-the-flow-from-pclinks-ui">2. Tracking the flow from PCLink’s UI</h3>
+
+<p>The first entry point was to search for the strings the user actually sees in the interface:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Setup Password Protection
+Unlock Password Protection
+Enter Password
+Confirm Password
+</code></pre></div></div>
+
+<p>A minimal radare2 session to inventory the binary and hunt for those strings could look like this:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>r2 -q -e bin.relocs.apply=true PCLink.exe
+[0x00400000]&gt; aaa
+[0x00400000]&gt; iI
+[0x00400000]&gt; izz~Password
+[0x00400000]&gt; izz~TunerPassword
+[0x00400000]&gt; izz~UnlockPassword
+</code></pre></div></div>
+
+<p>The method table and the VCL resources contain, among others, these names:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TunerPassword1Click
+UnlockPasswordProtection1Click
+OKSetPasswordButClick
+Password1Edit
+Password2Edit
+</code></pre></div></div>
+
+<p>Following the references and the form method tables got me to two main handlers:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Address</th>
+      <th>Function</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">0x004C334C</code></td>
+      <td><code class="highlighter-rouge">TunerPassword1Click</code>: Password Protection setup</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">0x004C35A8</code></td>
+      <td><code class="highlighter-rouge">UnlockPasswordProtection1Click</code>: unlock</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>These functions let you study the password logic, but first I needed to understand how PCLink turns the opaque file into the XML that those components actually consume.</p>
+
+<h3 id="3-spotting-xxtea-by-its-constant-and-its-structure">3. Spotting XXTEA by its constant and its structure</h3>
+
+<p>TEA, XTEA and XXTEA are usually easy to recognize thanks to the constant <code class="highlighter-rouge">0x9E3779B9</code>, derived from the golden ratio (go check Wikipedia, this cipher uses that constant). In little-endian it shows up in the executable as <code class="highlighter-rouge">B9 79 37 9E</code>.</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[0x00400000]&gt; /x b979379e
+0x00451717 hit0_0 b979379e
+0x00451802 hit0_1 b979379e
+0x004518c4 hit0_2 b979379e
+</code></pre></div></div>
+
+<p>All the hits landed inside a single function starting at <code class="highlighter-rouge">0x004516D4</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[0x00400000]&gt; pd 220 @ 0x004516d4
+</code></pre></div></div>
+
+<p>Three details confirmed this wasn’t a coincidence:</p>
+
+<ol>
+  <li>At <code class="highlighter-rouge">0x004516F1</code> it loads <code class="highlighter-rouge">52</code>, divides by the number of words, and adds <code class="highlighter-rouge">6</code>.</li>
+  <li>At <code class="highlighter-rouge">0x00451713</code> it adds <code class="highlighter-rouge">0x9E3779B9</code> in the encryption branch.</li>
+  <li>At <code class="highlighter-rouge">0x004518C0</code> it subtracts <code class="highlighter-rouge">0x9E3779B9</code> in the decryption branch.</li>
+</ol>
+
+<p>The rounds line up with XXTEA:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rounds = 6 + 52 / n
+</code></pre></div></div>
+
+<p>The reconstructed mixing function matches XXTEA too:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MX</span> <span class="o">=</span> <span class="p">(((</span><span class="n">z</span> <span class="o">&gt;&gt;</span> <span class="mi">5</span><span class="p">)</span> <span class="o">^</span> <span class="p">(</span><span class="n">y</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">))</span> <span class="o">+</span> <span class="p">((</span><span class="n">y</span> <span class="o">&gt;&gt;</span> <span class="mi">3</span><span class="p">)</span> <span class="o">^</span> <span class="p">(</span><span class="n">z</span> <span class="o">&lt;&lt;</span> <span class="mi">4</span><span class="p">)))</span>
+   <span class="o">^</span> <span class="p">((</span><span class="n">sum</span> <span class="o">^</span> <span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">key</span><span class="p">[(</span><span class="n">p</span> <span class="o">&amp;</span> <span class="mi">3</span><span class="p">)</span> <span class="o">^</span> <span class="n">e</span><span class="p">]</span> <span class="o">^</span> <span class="n">z</span><span class="p">));</span>
+</code></pre></div></div>
+
+<p>The function bundles encryption and decryption together. A positive word count triggers the encrypt branch; a negative one triggers decrypt. The read wrapper negates the counter right before calling it:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x004519e8  neg edx
+0x004519ec  call 0x4516d4
+</code></pre></div></div>
+
+<p>So the core function was pinned down as:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x004516D4  XXTEA encrypt/decrypt over a DWORD vector
+</code></pre></div></div>
+
+<h3 id="4-rebuilding-the-container-around-the-xml">4. Rebuilding the container around the XML</h3>
+
+<p>The stream encryption function starts at <code class="highlighter-rouge">0x004518D8</code>. The disassembly shows it takes the length of the XML stream, works out how many DWORDs to allocate, prepares three header words, copies the XML starting at byte 12, and calls the XXTEA routine:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x004518f5  sar edi, 2
+0x004518f8  add edi, 4
+...
+0x00451921  mov dword [ebx], eax       ; random DWORD
+0x00451929  mov dword [ebx + 4], eax   ; XML length
+0x0045192c  mov dword [ebx + 8], ebp   ; validation
+...
+0x00451955  call 0x4516d4              ; XXTEA
+</code></pre></div></div>
+
+<p>The allocation works out to:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>word_count = floor(xml_length / 4) + 4
+</code></pre></div></div>
+
+<p>That leaves between one and four bytes of padding after the XML. The first DWORD is built from a random value multiplied by <code class="highlighter-rouge">1234567</code> (well, well), with the float literal showing up at <code class="highlighter-rouge">0x00451984</code>.</p>
+
+<p>The full structure before encryption looks like this:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: right">Offset</th>
+      <th style="text-align: right">Size</th>
+      <th>Content</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">0x00</code></td>
+      <td style="text-align: right">4 bytes</td>
+      <td>Random DWORD</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">0x04</code></td>
+      <td style="text-align: right">4 bytes</td>
+      <td>Exact XML length</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">0x08</code></td>
+      <td style="text-align: right">4 bytes</td>
+      <td>Validation value</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">0x0C</code></td>
+      <td style="text-align: right">variable</td>
+      <td>UTF-8 LinkStorage XML</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">end</td>
+      <td style="text-align: right">1–4 bytes</td>
+      <td>Padding up to the allocated size</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The whole block is then treated as a single DWORD vector and encrypted with XXTEA.</p>
+
+<p>The inverse function starts at <code class="highlighter-rouge">0x00451988</code>. Its steps are symmetric:</p>
+
+<ol>
+  <li>Gets <code class="highlighter-rouge">file_size / 4</code>.</li>
+  <li>Reads the whole file into memory.</li>
+  <li>Negates the counter and calls <code class="highlighter-rouge">0x004516D4</code>.</li>
+  <li>Checks the validation DWORD at <code class="highlighter-rouge">+8</code>.</li>
+  <li>Reads the length from <code class="highlighter-rouge">+4</code>.</li>
+  <li>Copies exactly that many bytes from <code class="highlighter-rouge">+12</code> into the output stream.</li>
+</ol>
+
+<p>The general-purpose routines wiring this wrapper up to <code class="highlighter-rouge">LinkStorage</code> live at <code class="highlighter-rouge">0x0041A104</code> for reading and <code class="highlighter-rouge">0x0041B404</code> for writing.</p>
+
+<h3 id="5-finding-the-containers-fixed-key">5. Finding the container’s fixed key</h3>
+
+<p>The XXTEA function takes a pointer to four DWORDs, i.e. a 128-bit key. Next step was to check its callers from the load and save routines.</p>
+
+<p>At <code class="highlighter-rouge">0x0041A127</code> the pointer shows up during the read:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x0041a127  push 0x8eda90
+0x0041a132  call 0x451988
+</code></pre></div></div>
+
+<p>And on save, the same address pops up again:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x0041b485  mov ecx, 0x8eda90
+</code></pre></div></div>
+
+<p>Searching for the little-endian pointer confirmed all its references:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[0x00400000]&gt; /x 90da8e00
+0x0041a128 hit0_0 90da8e00
+0x0041b486 hit0_1 90da8e00
+0x00514bc7 hit0_2 90da8e00
+0x00516251 hit0_3 90da8e00
+</code></pre></div></div>
+
+<p>And finally, the four DWORDs:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[0x00400000]&gt; pxw 16 @ 0x008eda90
+0x008eda90  0x00004d5c 0x0000b091 0x0091fcc8 0x0007c4fe
+</code></pre></div></div>
+
+<p>So the container key for this version is:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>00004D5C 0000B091 0091FCC8 0007C4FE
+</code></pre></div></div>
+
+<p>This is the <strong>fixed (or master) container key</strong>, <em>not</em> the password the user types in. PCLink needs it to open any PCLX in this format, which is exactly why it’s baked right into the executable.</p>
+
+<p>There was also another 16-byte block at <code class="highlighter-rouge">0x008EDAB0</code> and an RC4 routine at <code class="highlighter-rouge">0x00451568</code>. Both looked like candidates at first. Instead of just assuming they belonged to the PCLX, I tested them and validated the output. The key at <code class="highlighter-rouge">0x008EDA90</code> produced a sensible length and valid XML; the one at <code class="highlighter-rouge">0x008EDAB0</code> produced an impossible length and random garbage. The RC4 routine belonged to a different internal path.</p>
+
+<h3 id="6-writing-a-decryption-script">6. Writing a decryption script.</h3>
+
+<p>With the algorithm and key nailed down, I threw together a small script. The decryption core reproduces the operations I’d seen, pretty much verbatim:</p>
+
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">uint</span> <span class="n">rounds</span> <span class="p">=</span> <span class="p">(</span><span class="kt">uint</span><span class="p">)(</span><span class="m">6</span> <span class="p">+</span> <span class="m">52</span> <span class="p">/</span> <span class="n">words</span><span class="p">.</span><span class="n">Length</span><span class="p">);</span>
+<span class="kt">uint</span> <span class="n">sum</span> <span class="p">=</span> <span class="n">rounds</span> <span class="p">*</span> <span class="m">0x9E3779B9u</span><span class="p">;</span>
+<span class="kt">uint</span> <span class="n">y</span> <span class="p">=</span> <span class="n">words</span><span class="p">[</span><span class="m">0</span><span class="p">];</span>
+
+<span class="k">while</span> <span class="p">(</span><span class="n">sum</span> <span class="p">!=</span> <span class="m">0</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint</span> <span class="n">e</span> <span class="p">=</span> <span class="p">(</span><span class="n">sum</span> <span class="p">&gt;&gt;</span> <span class="m">2</span><span class="p">)</span> <span class="p">&amp;</span> <span class="m">3</span><span class="p">;</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">p</span> <span class="p">=</span> <span class="n">words</span><span class="p">.</span><span class="n">Length</span> <span class="p">-</span> <span class="m">1</span><span class="p">;</span> <span class="n">p</span> <span class="p">&gt;</span> <span class="m">0</span><span class="p">;</span> <span class="n">p</span><span class="p">--)</span>
+    <span class="p">{</span>
+        <span class="kt">uint</span> <span class="n">z</span> <span class="p">=</span> <span class="n">words</span><span class="p">[</span><span class="n">p</span> <span class="p">-</span> <span class="m">1</span><span class="p">];</span>
+        <span class="n">y</span> <span class="p">=</span> <span class="n">words</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="p">-=</span> <span class="nf">Mix</span><span class="p">(</span><span class="n">sum</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="kt">uint</span> <span class="n">last</span> <span class="p">=</span> <span class="n">words</span><span class="p">[</span><span class="n">words</span><span class="p">.</span><span class="n">Length</span> <span class="p">-</span> <span class="m">1</span><span class="p">];</span>
+    <span class="n">y</span> <span class="p">=</span> <span class="n">words</span><span class="p">[</span><span class="m">0</span><span class="p">]</span> <span class="p">-=</span> <span class="nf">Mix</span><span class="p">(</span><span class="n">sum</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">last</span><span class="p">,</span> <span class="m">0</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span>
+    <span class="n">sum</span> <span class="p">-=</span> <span class="m">0x9E3779B9u</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Accepting an output just because it had <em>some</em> printable character in it would’ve been a weak validation. So the script demanded four conditions:</p>
+
+<ol>
+  <li>The input file had to be a multiple of four bytes.</li>
+  <li>The length stored in the second DWORD had to fit inside the container.</li>
+  <li>The payload had to start with an XML declaration.</li>
+  <li>The XML had to be well-formed and have <code class="highlighter-rouge">LinkStorage</code> as its root.</li>
+</ol>
+
+<p>The sample Honda map spat out this:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>random DWORD:     0x000B865E
+payload length:   563701
+validation DWORD: 0x00000000
+payload:          &lt;?xml version="1.0"?&gt;
+                  &lt;LinkStorage Version="100" Type=".xml"&gt; ...
+padding:          00 00 00
+</code></pre></div></div>
+
+<p>That result confirmed the algorithm, the key, and the header structure all at once. The alternative key returned, for example, a length of several million for a half-megabyte file, so I could rule it out objectively.</p>
+
+<p>As an extra sanity check, I decrypted <code class="highlighter-rouge">ECU.cfgr</code>, which installs alongside PCLink. It used the same container and revealed an XML parameter base of <code class="highlighter-rouge">2,438,771</code> bytes. This file turned out to be the key to putting names on the password fields.</p>
+
+<h3 id="7-locating-the-password-inside-linkstorage">7. Locating the password inside <code class="highlighter-rouge">LinkStorage</code></h3>
+
+<p>The ECUrecovery article I mentioned earlier might already get you there, but its technique is a bit janky, it basically just searches for literals that look like a password. What I wanted was to automate this with zero human input.</p>
+
+<p>So once I had the XML, I searched for password-related terms and looked up specific definitions by <code class="highlighter-rouge">DataId</code> in <code class="highlighter-rouge">ECU.cfgr</code>. Four relevant parameters showed up:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: right">DataId</th>
+      <th>Name in the parameter base</th>
+      <th>Representation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">2294</code></td>
+      <td><code class="highlighter-rouge">Master Password G4</code></td>
+      <td>Vector of 20 values between 0 and 255</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">2295</code></td>
+      <td><code class="highlighter-rouge">User Password G4</code></td>
+      <td>Copies the definition from 2294</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">2303</code></td>
+      <td><code class="highlighter-rouge">Password Settings</code></td>
+      <td>Internal state and options</td>
+    </tr>
+    <tr>
+      <td style="text-align: right"><code class="highlighter-rouge">2324</code></td>
+      <td><code class="highlighter-rouge">Password Protection</code></td>
+      <td>State visible in PCLink</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The definition for 2294 specifies one row, twenty columns, min zero, max 255, and a default made of twenty zeros. On a map with no password it looks like this:</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;D2294</span> <span class="na">DataId=</span><span class="s">"2294"</span> <span class="na">Type=</span><span class="s">"1"</span> <span class="na">RowCount=</span><span class="s">"1"</span> <span class="na">ColCount=</span><span class="s">"20"</span> <span class="na">Count=</span><span class="s">"20"</span><span class="nt">&gt;</span>
+  <span class="nt">&lt;Row0</span> <span class="na">Value=</span><span class="s">"0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"</span> <span class="nt">/&gt;</span>
+<span class="nt">&lt;/D2294&gt;</span>
+<span class="nt">&lt;D2295</span> <span class="na">DataId=</span><span class="s">"2295"</span> <span class="na">Type=</span><span class="s">"1"</span> <span class="na">RowCount=</span><span class="s">"1"</span> <span class="na">ColCount=</span><span class="s">"20"</span> <span class="na">Count=</span><span class="s">"20"</span><span class="nt">&gt;</span>
+  <span class="nt">&lt;Row0</span> <span class="na">Value=</span><span class="s">"0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"</span> <span class="nt">/&gt;</span>
+<span class="nt">&lt;/D2295&gt;</span>
+</code></pre></div></div>
+
+<p>On the protected map I used as a sample, D2294 contained:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>112,101,112,101,49,50,51,0,0,0,0,0,0,0,0,0,0,0,0,0
+</code></pre></div></div>
+
+<p>Converting each non-zero value straight to a character gives you:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>112 -&gt; p
+101 -&gt; e
+112 -&gt; p
+101 -&gt; e
+ 49 -&gt; 1
+ 50 -&gt; 2
+ 51 -&gt; 3
+</code></pre></div></div>
+
+<p>The test password, <code class="highlighter-rouge">pepe123</code>, was recovered with zero brute force. No hash, no salt, no key derivation function, just the numeric character codes sitting inside the XML, even though the whole XML <em>was</em> covered by the XXTEA layer.</p>
+
+<h3 id="conclusions">Conclusions</h3>
+
+<p>The PCLX format I looked at has two layers you really don’t want to mix up. The first is an XXTEA container with a fixed 128-bit key baked into PCLink. Its practical job is to stop the file from exposing the XML directly. The second is Password Protection, implemented through two vectors inside that XML.</p>
+
+<p>The password the user types in doesn’t derive the XXTEA key, isn’t stored as a hash, and doesn’t individually encrypt the calibration. PCLink stores it as character codes in D2294 and figures out the state by comparing it against D2295. Because of that, anyone who can reproduce the outer container layer can recover the value and rebuild an unprotected copy.</p>
+
+<p><code class="highlighter-rouge">Save as Encrypted</code> adds an ECU-tied check via the third header DWORD, but it’s still a separate path from Password Protection.</p>
+
+<p>The result is specific to PCLink G5 7.8.2. An update could change the key, the addresses, the parameter IDs, or even the whole format. The methodology, though, still holds up: inventory the binary, hunt for constants and strings, follow the calls, come up with hypotheses, validate them against real files, and demand a round-trip proof before you call the format “understood”.
+&lt;/content&gt;
+&lt;/invoke&gt;</p>
+
+  </div>
+
+  
+
+</article>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <p>
+      
+
+&copy;  - Powered by <a href="https://jekyllrb.com">Jekyll</a> &amp; <a href="https://github.com/yous/whiteglass">whiteglass</a> - Subscribe via <a href="/feed.xml">RSS</a>
+
+    </p>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
